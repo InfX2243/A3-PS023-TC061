@@ -90,7 +90,7 @@ func (s *Service) RecordWorkerHeartbeat(ctx context.Context, heartbeat workerhea
 		err := tx.QueryRowContext(ctx, "SELECT memory_limit_bytes FROM workers WHERE id = ?", heartbeat.WorkerID).Scan(&configuredLimit)
 		if errors.Is(err, sql.ErrNoRows) { return fmt.Errorf("unconfigured worker %q", heartbeat.WorkerID) }
 		if err != nil { return fmt.Errorf("load configured worker limit: %w", err) }
-		if configuredLimit <= 0 || heartbeat.ConfiguredMemoryCapBytes == 0 || heartbeat.ConfiguredMemoryCapBytes > uint64(configuredLimit) { return fmt.Errorf("worker %q reported an invalid configured memory cap", heartbeat.WorkerID) }
+		if configuredLimit <= 0 || heartbeat.ConfiguredMemoryCapBytes == 0 || heartbeat.ConfiguredMemoryCapBytes != uint64(configuredLimit) { return fmt.Errorf("worker %q reported a configured memory cap that does not match controller configuration", heartbeat.WorkerID) }
 		if heartbeat.AvailableMemoryBytes > uint64(configuredLimit) { return fmt.Errorf("worker %q reported available memory above its controller-configured limit", heartbeat.WorkerID) }
 		state := "unreachable"
 		if heartbeat.CloudHypervisorHealthy { state = "healthy" }

@@ -34,7 +34,7 @@ On each worker:
 
 ## 3. Controller worker configuration
 
-Add one entry per worker to controller.json. Replace example addresses with actual private IPs and ensure each configured memory cap is no larger than the cap configured on that worker.
+Add one entry per worker to controller.json. Replace example addresses with actual private IPs and ensure each configured memory cap exactly matches the cap configured on that worker.
 
 ```json
 {

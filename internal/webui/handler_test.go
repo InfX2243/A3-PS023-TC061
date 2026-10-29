@@ -226,6 +226,34 @@ func TestLoginRedirectsToOperatorConsole(t *testing.T) {
 	}
 }
 
+
+func TestUIEnhancementAssetAndFormLoadingStates(t *testing.T) {
+	_, handler := newTestUI()
+	assetResponse := httptest.NewRecorder()
+	handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, "/assets/ui.js", nil))
+	if assetResponse.Code != http.StatusOK {
+		t.Fatalf("asset status = %d", assetResponse.Code)
+	}
+	if !strings.Contains(assetResponse.Header().Get("Content-Type"), "javascript") {
+		t.Fatalf("asset content type = %q", assetResponse.Header().Get("Content-Type"))
+	}
+	asset := assetResponse.Body.String()
+	for _, expected := range []string{"IntersectionObserver", "aria-current", "Signing in…", "Signing out…", "prefers-reduced-motion"} {
+		if !strings.Contains(asset, expected) {
+			t.Fatalf("enhancement asset omitted %q", expected)
+		}
+	}
+
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if !strings.Contains(loginResponse.Body.String(), "src=\"/assets/ui.js\"") {
+		t.Fatal("login page does not load progressive form feedback")
+	}
+	if !strings.Contains(loginResponse.Body.String(), "ui-button-spinner") {
+		t.Fatal("login page does not include visible loading indicator styles")
+	}
+}
+
 func TestPrimaryPagesExposeKeyboardSkipNavigation(t *testing.T) {
 	_, handler := newTestUI()
 	loginRequest := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))

@@ -85,12 +85,12 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 ### T-07 — Implement local Cloud Hypervisor adapter
 - Scope re-confirmed by user: use AWS's official nested-virtualization documentation as platform-support evidence and proceed with adapter implementation against the selected Cloud Hypervisor v54.0 API contract. Keep instance boot/stop proof as a mandatory deployment gate.
 - Versioned API source and adapter contract documented in [Cloud Hypervisor v54.0 API contract](./cloudhypervisor-api-v54.md): `vm.create`, `vm.boot`, `vm.shutdown`, `vm.info`, and `vmm.ping` method/path/status choices checked against the v54.0 OpenAPI specification.
-- Fixed the macOS Unix-socket path-length issue in the fake-socket tests by creating a short socket path under `/tmp`. The test suite has not yet been run after this fix in the current environment.
+- Fixed the macOS Unix-socket path-length issue in fake-socket tests by using a short socket path under `/tmp`; the full suite now passes in CI.
 - [x] Verify endpoint methods, paths, and success statuses against the pinned v54.0 OpenAPI specification.
 - [x] Implement typed calls for VM prepare/create, start, stop, and status.
 - [x] Add bounded timeouts and structured errors.
 - [x] Align memory size to v54.0 schema (integer bytes), reject non-positive configured memory, and accept all documented VM states including `BreakPoint`.
-- [x] CI ran `gofmt` and `go test ./...`; fake Unix-socket tests passed on commit `136211af60d7fcac848743b1bac782a7951440ea` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40932420786)).
+- [x] CI ran `gofmt` and `go test ./...`; fake Unix-socket tests passed on commit `7132fb4b1da7eb1df1b02d3ddd5663b8259d5217` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40933395022)).
 - [ ] Run a real Cloud Hypervisor v54.0 smoke test on an AWS candidate host before deployment acceptance.
 - Acceptance: adapter tests pass against the fake API; host smoke test is recorded before two-worker rollout.
 - Status: **implementation and automated tests verified; host runtime smoke test pending**. CI tests do not establish that `/dev/kvm` or the selected guest image works on a real EC2 instance.
@@ -108,12 +108,12 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Acceptance: create/start/stop/status work on one host; repeated commands do not spawn duplicate VM processes; invalid image/path inputs are rejected; child processes are reaped.
 - Evidence: implementation files are present at `internal/workeragent/manager.go`, `internal/workeragent/http.go`, `internal/workeragent/manager_test.go`, `internal/workeragent/integration_test.go`, `cmd/worker-agent/main.go`, and `worker.example.json`; CI passed on commit `136211af60d7fcac848743b1bac782a7951440ea` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40932420786)).
 - Status: **automated tests pass; real Cloud Hypervisor runtime and worker-agent restart behavior remain pending**. The tests use simulated VMMs, not an AWS-backed guest.
-- Depends on: T-06, T-07 implementation (T-07 test execution remains pending by user direction).
+- Depends on: T-06, T-07 implementation (T-07 automated tests now pass; real host smoke test remains pending).
 
 ### T-09 — Add worker integration tests
 - [x] CI ran the workeragent tests covering VMM unavailable, invalid image, timeout, process exit, and orderly worker restart cleanup.
 - [x] Tests verify actionable worker errors and that timed-out starts are not reported as running.
-- [ ] Decide and implement durable worker-side inventory/reattachment if required by final restart tests.
+- [x] Decide durable worker-side inventory/reattachment is not required for this MVP: controller reconciliation preserves unknown state when worker state is missing rather than claiming success.
 - Implementation present: focused worker lifecycle tests are in `internal/workeragent/manager_test.go` and `internal/workeragent/integration_test.go`.
 - Acceptance: worker tests pass; failures return actionable, non-secret errors.
 - Status: **automated worker lifecycle tests pass; real worker restart/runtime validation pending**.

@@ -26,7 +26,8 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 DeviceAllow=/dev/kvm rw
-ReadWritePaths=/var/lib/vm-controller-worker /var/lib/vm-controller/images
+ReadWritePaths=/var/lib/vm-controller-worker
+ReadOnlyPaths=/var/lib/vm-controller/images
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]

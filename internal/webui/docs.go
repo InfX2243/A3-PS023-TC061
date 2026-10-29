@@ -20,62 +20,62 @@ const docsPageTemplate = `
 <title>Documentation · Aiori Compute</title>
 {{template "styles" .}}
 <style>
-.docs-page{min-height:100vh;background:#f7f8fc;color:#20283a}
+.docs-page{min-height:100vh;background:#f7f8fc;color:#20283a;font-size:16px;scroll-behavior:smooth;scroll-padding-top:104px}
 .docs-topbar{height:68px;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 max(24px,calc((100vw - 1320px)/2));background:#fff;border-bottom:1px solid #e4e8f0;position:sticky;top:0;z-index:5}
 .docs-brand{display:flex;align-items:center;gap:11px;color:#20283a;text-decoration:none}
 .docs-brand .brand-mark{background:#252f56;color:#fff}
 .docs-brand-name{font-size:14px;font-weight:800;letter-spacing:-.3px}
 .docs-brand-sub{font-size:10px;color:#536078;margin-top:2px}
 .docs-top-links{display:flex;align-items:center;gap:10px}
-.docs-top-links a{font-size:12px;text-decoration:none;color:#536078;font-weight:650}
+.docs-top-links a{font-size:14px;text-decoration:none;color:#38445d;font-weight:700}
 .docs-top-links a:hover{color:#5556d5}
 .docs-hero{background:radial-gradient(ellipse at 88% 15%,#474a9a 0%,transparent 34%),linear-gradient(120deg,#11192e,#252f56 72%,#343b76);color:#fff;padding:54px max(24px,calc((100vw - 1160px)/2)) 48px}
 .docs-hero-inner{max-width:850px}
 .docs-kicker{color:#b9c0ff;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;font-weight:800}
 .docs-hero h1{font-size:clamp(30px,4vw,45px);line-height:1.1;letter-spacing:-1.7px;margin:13px 0 13px}
-.docs-hero p{max-width:730px;color:#d0d7ed;font-size:14px;line-height:1.8;margin:0}
+.docs-hero p{max-width:730px;color:#e0e5f5;font-size:17px;line-height:1.75;margin:0}
 .docs-hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
-.docs-chip{border:1px solid #ffffff2b;border-radius:7px;padding:7px 10px;color:#e0e5f8;font-size:10px}
+.docs-chip{border:1px solid #ffffff42;border-radius:7px;padding:8px 11px;color:#f0f2fc;font-size:12px}
 .docs-layout{max-width:1320px;margin:0 auto;padding:32px 24px 70px;display:grid;grid-template-columns:220px minmax(0,780px) 180px;gap:36px;align-items:start}
 .docs-sidebar{position:sticky;top:94px;max-height:calc(100vh - 120px);overflow:auto;padding:5px 0 20px}
-.docs-nav-label{font-size:9px;text-transform:uppercase;letter-spacing:1.4px;font-weight:800;color:#58647a;margin:15px 0 8px}
+.docs-nav-label{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;font-weight:800;color:#4c5870;margin:18px 0 9px}
 .docs-nav{display:grid;gap:3px}
-.docs-nav a{font-size:11px;color:#657087;text-decoration:none;padding:8px 10px;border-radius:7px;line-height:1.35}
-.docs-nav a:hover{background:#eceeff;color:#4e50c5}
-.docs-nav a.docs-nav-primary{color:#4e50c5;font-weight:750}
+.docs-nav a{font-size:14px;color:#46536b;text-decoration:none;padding:10px 12px;border-radius:7px;line-height:1.45;border-left:3px solid transparent}
+.docs-nav a:hover{background:#eceeff;color:#3437a6}.docs-nav a[aria-current="location"],.docs-nav a.is-active{background:#e8eaff;color:#3437a6;border-left-color:#4d50d2;font-weight:800;box-shadow:inset 0 0 0 1px #d9dcff}
+.docs-nav a.docs-nav-primary{color:#3437a6;font-weight:800}
 .docs-article{min-width:0}
-.docs-section{padding:0 0 30px;margin:0 0 29px;border-bottom:1px solid #e4e8f0;scroll-margin-top:92px}
+.docs-section{padding:0 0 36px;margin:0 0 34px;border-bottom:1px solid #e0e5ef;scroll-margin-top:108px}
 .docs-section:last-child{border-bottom:0}
-.docs-section h2{font-size:22px;letter-spacing:-.6px;margin:0 0 12px;color:#20283a}
-.docs-section h3{font-size:14px;margin:23px 0 8px;letter-spacing:-.2px}
-.docs-section p,.docs-section li{font-size:12px;line-height:1.85;color:#58647a}
+.docs-section h2{font-size:clamp(25px,2.2vw,30px);line-height:1.25;letter-spacing:-.6px;margin:0 0 16px;color:#20283a}
+.docs-section h3{font-size:19px;line-height:1.35;margin:26px 0 10px;letter-spacing:-.2px}
+.docs-section p,.docs-section li{font-size:16px;line-height:1.8;color:#46536b}
 .docs-section p{margin:9px 0}
 .docs-section ul,.docs-section ol{padding-left:20px;margin:9px 0}
-.docs-lead{font-size:14px!important;color:#536078!important;line-height:1.85!important}
-.docs-note{padding:13px 15px;border:1px solid #dfe3fa;background:#f0f1ff;border-radius:9px;color:#4f529f;font-size:11px;line-height:1.75;margin:15px 0}
+.docs-lead{font-size:18px!important;color:#46536b!important;line-height:1.8!important}
+.docs-note{padding:16px 18px;border:1px solid #d5d9fa;background:#f0f1ff;border-radius:9px;color:#41448c;font-size:15px;line-height:1.75;margin:18px 0}
 .docs-note.warning{border-color:#f0dfb7;background:#fff8e8;color:#875e17}
 .docs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin:16px 0}
 .docs-card{background:#fff;border:1px solid #e3e7f0;border-radius:10px;padding:15px}
-.docs-card h3{font-size:12px;margin:0 0 6px}
-.docs-card p{font-size:11px;line-height:1.7;margin:0}
-.docs-card a{font-size:11px;color:#5355cb;text-decoration:none;font-weight:750;display:inline-block;margin-top:10px}
+.docs-card h3{font-size:17px;margin:0 0 8px}
+.docs-card p{font-size:14px;line-height:1.75;margin:0}
+.docs-card a{font-size:14px;color:#393bb0;text-decoration:none;font-weight:800;display:inline-block;margin-top:12px}
 .docs-card a:hover{text-decoration:underline}
 .docs-table-wrap{overflow-x:auto;border:1px solid #e4e8f0;border-radius:9px;background:#fff;margin:13px 0}
-.docs-table{border-collapse:collapse;width:100%;font-size:11px;white-space:normal}
-.docs-table th{text-align:left;background:#f9faff;color:#58647a;font-size:9px;letter-spacing:.7px;text-transform:uppercase;padding:10px 12px}
-.docs-table td{padding:11px 12px;border-top:1px solid #edf0f5;line-height:1.65;color:#58647a;vertical-align:top}
+.docs-table{border-collapse:collapse;width:100%;font-size:14px;white-space:normal}
+.docs-table th{text-align:left;background:#f2f4fb;color:#46536b;font-size:12px;letter-spacing:.6px;text-transform:uppercase;padding:13px 14px}
+.docs-table td{padding:13px 14px;border-top:1px solid #edf0f5;line-height:1.7;color:#46536b;vertical-align:top}
 .docs-table td:first-child{font-weight:750;color:#303b51;white-space:nowrap}
 .docs-code{position:relative;background:#151d31;color:#e2e8f8;border-radius:9px;padding:15px 16px;margin:12px 0;overflow-x:auto}
-.docs-code pre{margin:0;white-space:pre;line-height:1.75;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.docs-inline-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;background:#eceef5;color:#3e4960;padding:2px 4px;border-radius:4px}
+.docs-code pre{margin:0;white-space:pre;line-height:1.75;font-size:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.docs-inline-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:#eceef5;color:#3e4960;padding:2px 4px;border-radius:4px}
 .docs-aside{position:sticky;top:94px}
 .docs-aside-card{background:#fff;border:1px solid #e3e7f0;border-radius:10px;padding:14px}
-.docs-aside-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#58647a;font-weight:800;margin-bottom:11px}
-.docs-aside a{display:block;font-size:10px;line-height:1.5;color:#5d6880;text-decoration:none;margin:10px 0}
+.docs-aside-title{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#58647a;font-weight:800;margin-bottom:11px}
+.docs-aside a{display:block;font-size:13px;line-height:1.6;color:#5d6880;text-decoration:none;margin:10px 0}
 .docs-aside a:hover{color:#5355cb}
 .docs-aside .docs-aside-cta{border-top:1px solid #edf0f5;padding-top:12px;margin-top:13px;color:#5355cb;font-weight:800}
-.docs-footer{max-width:1320px;margin:0 auto;padding:20px 24px 28px;border-top:1px solid #e4e8f0;display:flex;justify-content:space-between;gap:12px;color:#58647a;font-size:10px}
-.docs-footer a{color:#5b5dd2;text-decoration:none}
+.docs-footer{max-width:1320px;margin:0 auto;padding:24px;border-top:1px solid #e4e8f0;display:flex;justify-content:space-between;gap:12px;color:#46536b;font-size:13px}
+.docs-footer a{color:#383aa8;text-decoration:underline;text-underline-offset:3px}.docs-top-links .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#3739a8!important;border:1px solid #3739a8!important;color:#fff!important;font-size:14px!important;font-weight:800!important;padding:11px 15px;min-height:44px;box-shadow:0 2px 0 #25277c}.docs-top-links .btn-primary:hover{background:#252780!important;border-color:#252780!important;color:#fff!important}.docs-page a:focus-visible,.docs-page button:focus-visible{outline:3px solid #6b6ef0;outline-offset:3px}.docs-page a,.docs-page button{transition:background-color .16s ease,color .16s ease,border-color .16s ease,box-shadow .16s ease}.docs-page{scroll-behavior:smooth}.docs-sidebar{scrollbar-width:thin;scrollbar-color:#c3c9db transparent}
 @media(max-width:1050px){.docs-layout{grid-template-columns:190px minmax(0,1fr);gap:25px}.docs-aside{display:none}}
 @media(max-width:680px){.docs-topbar{height:60px;padding:0 16px}.docs-top-links .docs-top-secondary{display:none}.docs-hero{padding:37px 20px 34px}.docs-layout{display:block;padding:27px 18px 45px}.docs-sidebar{position:static;max-height:none;border:1px solid #e3e7f0;background:#fff;border-radius:10px;padding:12px;margin-bottom:28px}.docs-nav{grid-template-columns:repeat(2,minmax(0,1fr))}.docs-nav-label{margin-top:8px}.docs-grid{grid-template-columns:1fr}.docs-footer{padding:18px;display:block}.docs-footer span{display:block;margin:5px 0}}
 </style>
@@ -89,7 +89,7 @@ const docsPageTemplate = `
 <section class="docs-hero"><div class="docs-hero-inner"><div class="docs-kicker">Operator guide · Engineering preview</div><h1>Understand the platform.<br>Operate with confidence.</h1><p>A practical guide to Aiori Compute: what the control plane does, how worker nodes and virtual machines fit together, how to create and operate a VM, and how to interpret states when an operation is still being reconciled.</p><div class="docs-hero-meta"><span class="docs-chip">Architecture and concepts</span><span class="docs-chip">Step-by-step operator workflow</span><span class="docs-chip">Security and troubleshooting</span></div></div></section>
 <div class="docs-layout">
 <aside class="docs-sidebar" aria-label="Documentation contents">
-<div class="docs-nav-label">Start here</div><nav class="docs-nav"><a class="docs-nav-primary" href="#overview">Platform overview</a><a href="#getting-started">Quick start</a><a href="#architecture">Architecture</a></nav>
+<div class="docs-nav-label">Start here</div><nav class="docs-nav"><a class="docs-nav-primary" href="#overview" aria-current="location">Platform overview</a><a href="#getting-started">Quick start</a><a href="#architecture">Architecture</a></nav>
 <div class="docs-nav-label">Operate</div><nav class="docs-nav"><a href="#workers">Worker fleet</a><a href="#virtual-machines">Virtual machines</a><a href="#lifecycle">Lifecycle and states</a><a href="#placement">Placement and capacity</a></nav>
 <div class="docs-nav-label">Reference</div><nav class="docs-nav"><a href="#security">Security model</a><a href="#troubleshooting">Troubleshooting</a><a href="#current-limitations">Current limitations</a></nav>
 </aside>
@@ -130,6 +130,6 @@ go run ./cmd/controller -config config.example.json</pre></div><p>The example co
 <aside class="docs-aside"><div class="docs-aside-card"><div class="docs-aside-title">On this page</div><a href="#getting-started">Quick start</a><a href="#architecture">Request flow</a><a href="#virtual-machines">Create a VM</a><a href="#lifecycle">State reference</a><a href="#security">Security model</a><a href="#troubleshooting">Troubleshooting</a><a class="docs-aside-cta" href="/login">Open operator console →</a></div></aside>
 </div>
 <footer class="docs-footer"><span>Aiori Compute · Engineering preview</span><span>Documentation is public; infrastructure actions require operator authentication.</span><span><a href="/login">Operator sign in</a></span></footer>
-</body></html>{{end}}
+<script src="/assets/ui.js" defer></script>\n</body></html>{{end}}
 `;
 

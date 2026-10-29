@@ -29,14 +29,14 @@ go test ./...
 go run ./cmd/controller -config config.example.json
 ```
 
-The controller example config binds to `127.0.0.1:8080` and uses local relative paths. It contains no credentials. The controller exposes `GET /healthz`. `worker.example.json` is a separate, credential-free worker-agent template; replace the illustrative absolute image paths with files staged and verified on each worker.
+The controller example config binds to `127.0.0.1:8080` and uses local relative paths. It contains no credentials. The controller exposes `GET /healthz`, the authenticated versioned API under `/api/v1`, and a server-rendered UI at `/`. `worker.example.json` is a separate, credential-free worker-agent template; replace the illustrative absolute image paths with files staged and verified on each worker.
 
 Runtime secrets are read from environment variables, not JSON config:
 
 - `VM_CONTROLLER_OPERATOR_TOKEN`
 - `VM_CONTROLLER_WORKER_SHARED_SECRET`
 
-The controller currently uses these for worker-heartbeat and operator worker-list endpoints. The worker agent requires `VM_CONTROLLER_WORKER_SHARED_SECRET` to authorize lifecycle requests. Start it with `go run ./cmd/worker-agent -config worker.example.json` after staging the configured Cloud Hypervisor binary and allowlisted image artifacts. Never expose the worker API or Cloud Hypervisor Unix socket publicly. Do not commit real credentials. Runtime database files under `data/` are ignored by Git.
+The operator token protects the UI and controller API; the worker shared secret protects heartbeats and controller-to-worker lifecycle calls. Configure trusted worker endpoints in the controller JSON before expecting placement to succeed. The worker agent requires `VM_CONTROLLER_WORKER_SHARED_SECRET` to authorize lifecycle requests. Start it with `go run ./cmd/worker-agent -config worker.example.json` after staging the configured Cloud Hypervisor binary and allowlisted image artifacts. Never expose the worker API or Cloud Hypervisor Unix socket publicly. Do not commit real credentials. Runtime database files under `data/` are ignored by Git.
 
 ## Current verification status
 

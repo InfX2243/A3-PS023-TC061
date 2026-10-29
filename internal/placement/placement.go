@@ -75,7 +75,7 @@ func PlaceAndReserve(ctx context.Context, tx *sql.Tx, vmID string, memoryBytes u
 		c := &candidates[i]
 		c.reserved = reservedByWorker[c.id]
 		availableCapacity := uint64(0)
-		if c.available > policy.SafetyReserveBytes { availableCapacity = c.available - policy.SafetyReserveBytes }
+		if c.available > policy.SafetyReserveBytes+c.reserved { availableCapacity = c.available - policy.SafetyReserveBytes - c.reserved }
 		limitCapacity := uint64(0)
 		if c.limit > c.reserved { limitCapacity = c.limit - c.reserved }
 		c.safeCapacity = availableCapacity

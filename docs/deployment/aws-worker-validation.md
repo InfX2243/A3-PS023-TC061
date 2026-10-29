@@ -15,7 +15,8 @@ Status: **candidate selected; runtime feasibility not yet proven**. This documen
 | AWS spend policy | One temporary worker at a time; no long-lived worker pair until pass | Tag resources for the hackathon and terminate the temporary instance and delete temporary volumes after evidence is captured. |
 
 References:
-- AWS nested virtualization: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html
+- AWS nested virtualization (global AWS documentation): https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html
+- AWS nested virtualization (China documentation also reviewed): https://docs.amazonaws.cn/en_us/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html
 - AWS instance availability by Region: https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-regions.html
 - Cloud Hypervisor releases: https://github.com/cloud-hypervisor/cloud-hypervisor/releases
 - Ubuntu pinned cloud image build: https://cloud-images.ubuntu.com/releases/releases/noble/release-20261017/

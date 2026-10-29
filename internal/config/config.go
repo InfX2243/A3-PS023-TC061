@@ -58,6 +58,9 @@ func Load(path string) (Config, error) {
 		f, err := os.Open(path)
 		if err != nil { return Config{}, fmt.Errorf("open config: %w", err) }
 		defer f.Close()
+		info, err := f.Stat()
+		if err != nil { return Config{}, fmt.Errorf("stat config: %w", err) }
+		if info.Mode().Perm()&0022 != 0 { return Config{}, errors.New("config file must not be group- or world-writable") }
 		dec := json.NewDecoder(f)
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&cfg); err != nil { return Config{}, fmt.Errorf("decode config: %w", err) }

@@ -257,7 +257,7 @@ func (s *Service) StartVM(ctx context.Context, vmID string) (domain.VM, domain.O
 		var reservationState sql.NullString
 		err = tx.QueryRowContext(ctx, "SELECT state FROM reservations WHERE vm_id = ?", vmID).Scan(&reservationState)
 		if errors.Is(err, sql.ErrNoRows) || (err == nil && reservationState.String == "released") {
-			workerID, reserveErr := placement.PlaceAndReserve(ctx, tx, vmID, vm.MemoryBytes, placement.Policy{SafetyReserveBytes: s.cfg.MemorySafetyReserveMiB * 1024 * 1024, StaleAfter: 30*time.Second}, now)
+			workerID, reserveErr := placement.PlaceAndReserveOnWorker(ctx, tx, vmID, vm.MemoryBytes, vm.WorkerID, placement.Policy{SafetyReserveBytes: s.cfg.MemorySafetyReserveMiB * 1024 * 1024, StaleAfter: 30*time.Second}, now)
 			if errors.Is(reserveErr, placement.ErrNoCapacity) { return controllerapi.ErrUnavailable }
 			if reserveErr != nil { return reserveErr }
 			vm.WorkerID = workerID
@@ -322,7 +322,7 @@ func (s *Service) StopVM(ctx context.Context, vmID string) (domain.VM, domain.Op
 	report, callErr := s.workers.stop(ctx, endpoint, vmID, opID)
 	switch {
 	case callErr == nil && report.State == "Shutdown" && report.WorkerID == vm.WorkerID:
-		err = s.finishOperation(ctx, vmID, opID, domain.OperationSucceeded, domain.VMStopped, domain.VMStopped, "active", "", "")
+		err = s.finishOperation(ctx, vmID, opID, domain.OperationSucceeded, domain.VMStopped, domain.VMStopped, "released", "", "")
 	case isUnknownWorkerOutcome(callErr) || (callErr == nil && (report.State != "Shutdown" || report.WorkerID != vm.WorkerID)):
 		err = s.finishOperation(ctx, vmID, opID, domain.OperationUnknown, domain.VMStopped, domain.VMUnknown, "active", "outcome_unknown", "worker outcome requires reconciliation")
 	default:

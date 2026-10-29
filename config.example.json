@@ -6,5 +6,6 @@
   "memory_safety_reserve_mib": 1024,
   "allowed_images": ["ubuntu-demo"],
   "workers": [],
+  "secure_cookies": false,
   "shutdown_timeout_seconds": 10
 }

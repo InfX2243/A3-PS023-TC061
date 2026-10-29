@@ -252,6 +252,18 @@ func TestUIEnhancementAssetAndFormLoadingStates(t *testing.T) {
 	if !strings.Contains(loginResponse.Body.String(), "ui-button-spinner") {
 		t.Fatal("login page does not include visible loading indicator styles")
 	}
+	vmLogin := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	vmLogin.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	vmLoginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(vmLoginResponse, vmLogin)
+	vmRequest := httptest.NewRequest(http.MethodGet, "/vms/new", nil)
+	vmRequest.AddCookie(vmLoginResponse.Result().Cookies()[0])
+	vmResponse := httptest.NewRecorder()
+	handler.ServeHTTP(vmResponse, vmRequest)
+	if vmResponse.Code != http.StatusOK || !strings.Contains(vmResponse.Body.String(), "src=\"/assets/ui.js\"") {
+		t.Fatalf("VM form did not load form feedback: status=%d", vmResponse.Code)
+	}
+
 }
 
 func TestPrimaryPagesExposeKeyboardSkipNavigation(t *testing.T) {

@@ -79,7 +79,9 @@ The user explicitly authorized continuing without waiting for environment verifi
 - Depends on: T-03, T-04.
 
 ### T-07 — Implement local Cloud Hypervisor adapter
-- [ ] Verify pinned API endpoints and local Unix socket behavior.
+- Implementation started in commits [a38da7f](https://github.com/InfX2243/A3-PS023-TC061/commit/a38da7f9e27648beace581519844e9914aa9d501) and [98209ed](https://github.com/InfX2243/A3-PS023-TC061/commit/98209ed937be65a13f7ff1e9eef2361a39a7749e): `internal/cloudhypervisor/client.go` provides a Unix-socket HTTP client, typed VM configuration/status, prepare/create/start/stop/status/ping calls, bounded request timeouts, response-size limits, and structured errors. Fake socket/client tests cover endpoint/method mapping, invalid configuration, HTTP failures, malformed/unknown status responses, and timeouts.
+- Verification pending: the user reported the pre-T-07 `go test ./...` suite passing, but the new adapter tests have not yet been run. No pinned Cloud Hypervisor version or host runtime evidence is available, so the real-host smoke test remains pending. Do not mark T-07 complete until adapter tests pass and the host test is performed or explicitly split/deferred.
+- [ ] Verify pinned API endpoints and local Unix socket behavior against the selected Cloud Hypervisor release.
 - [ ] Implement typed calls for VM prepare/create, start, stop, and status.
 - [ ] Use bounded timeouts and structured errors.
 - Acceptance: adapter tests pass against a fake API and actual host smoke test succeeds.

@@ -13,7 +13,13 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
 )
 
-type fakeUIService struct { createCalls int; lastKey string; startCalls int; stopCalls int; vms []domain.VM; latest domain.Operation; latestErr error }
+type fakeUIService struct { registeredID string; registeredName string; registeredEndpoint string; registeredMemory uint64; deletedID string; createCalls int; lastKey string; startCalls int; stopCalls int; vms []domain.VM; latest domain.Operation; latestErr error }
+func (s *fakeUIService) RegisterWorker(_ context.Context, id, name, endpoint string, memory uint64) error {
+	s.registeredID, s.registeredName, s.registeredEndpoint, s.registeredMemory = id, name, endpoint, memory
+	return nil
+}
+func (s *fakeUIService) DeleteWorker(_ context.Context, id string) error { s.deletedID = id; return nil }
+
 func (*fakeUIService) ListWorkers(context.Context) ([]domain.Worker, error) {
 	return []domain.Worker{{ID:"worker-a", Name:"Worker A", State:domain.WorkerHealthy, AvailableMemoryBytes:2*1024*1024*1024, MemoryLimitBytes:4*1024*1024*1024}}, nil
 }
@@ -307,4 +313,68 @@ func TestPrimaryPagesExposeKeyboardSkipNavigation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWorkerInventoryRequiresAuthenticationAndRendersRegistrationForm(t *testing.T) {
+	_, handler := newTestUI()
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/workers", nil))
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/login" {
+		t.Fatalf("unauthenticated worker inventory = %d, location %q", response.Code, response.Header().Get("Location"))
+	}
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	cookie := loginResponse.Result().Cookies()[0]
+	request := httptest.NewRequest(http.MethodGet, "/workers", nil)
+	request.AddCookie(cookie)
+	page := httptest.NewRecorder()
+	handler.ServeHTTP(page, request)
+	if page.Code != http.StatusOK { t.Fatalf("worker inventory status = %d; body=%s", page.Code, page.Body.String()) }
+	for _, want := range []string{"Register a machine", "memory_limit_mib", "Worker agent base URL"} {
+		if !strings.Contains(page.Body.String(), want) { t.Errorf("worker page missing %q", want) }
+	}
+}
+
+func TestRegisterWorkerRequiresCSRFAndPersistsThroughService(t *testing.T) {
+	h, handler := newTestUI()
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	cookie := loginResponse.Result().Cookies()[0]
+	get := httptest.NewRequest(http.MethodGet, "/workers", nil)
+	get.AddCookie(cookie)
+	csrf := h.csrfToken(get)
+	form := url.Values{"csrf_token": {csrf}, "id": {"worker-test"}, "name": {"Test Worker"}, "endpoint": {"https://worker.example.internal:9090"}, "memory_limit_mib": {"7168"}}
+	request := httptest.NewRequest(http.MethodPost, "/workers", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusSeeOther || !strings.HasPrefix(response.Header().Get("Location"), "/workers?notice=") {
+		t.Fatalf("registration response = %d, location=%q, body=%s", response.Code, response.Header().Get("Location"), response.Body.String())
+	}
+	fake := h.service.(*fakeUIService)
+	if fake.registeredID != "worker-test" || fake.registeredName != "Test Worker" || fake.registeredEndpoint != "https://worker.example.internal:9090" || fake.registeredMemory != 7168 {
+		t.Fatalf("unexpected worker registration: %#v", fake)
+	}
+}
+
+func TestRegisterWorkerRejectsMissingCSRF(t *testing.T) {
+	h, handler := newTestUI()
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	cookie := loginResponse.Result().Cookies()[0]
+	form := url.Values{"id": {"worker-test"}, "name": {"Test Worker"}, "endpoint": {"file:///etc/passwd"}, "memory_limit_mib": {"1024"}}
+	request := httptest.NewRequest(http.MethodPost, "/workers", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden { t.Fatalf("missing CSRF response = %d, want 403", response.Code) }
+	if h.service.(*fakeUIService).registeredID != "" { t.Fatal("worker registration happened without CSRF token") }
 }

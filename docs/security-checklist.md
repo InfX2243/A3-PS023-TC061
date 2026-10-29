@@ -12,7 +12,7 @@ This checklist separates controls implemented in code from deployment checks tha
 - [x] VM IDs are constrained before being used in runtime paths. Cloud Hypervisor is started with an argument array, not a shell command.
 - [x] Worker base URLs are explicit configuration, reject URL credentials/query/fragment, and redirects are disabled for worker calls.
 - [x] Worker runtime directories are forced to mode 0700; the Cloud Hypervisor API socket is set to 0600.
-- [x] UI sessions use an HMAC-signed expiry cookie with HttpOnly, SameSite=Strict, and configurable Secure; pages set CSP, anti-framing, no-sniff, and referrer-policy headers.
+- [x] UI sessions use an HMAC-signed expiry cookie with HttpOnly, SameSite=Strict, and configurable Secure; authenticated mutations use CSRF tokens; pages set CSP, anti-framing, no-sniff, and referrer-policy headers.
 - [x] UI form payloads are bounded and user-facing errors avoid exposing internal database/worker errors.
 - [x] Worker outcome timeouts are represented as unknown and do not release memory reservations.
 - [x] Structured logs do not include bearer tokens or request bodies.

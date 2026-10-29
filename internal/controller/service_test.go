@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -154,4 +155,35 @@ func TestReconcileResolvesUnknownCreateFromWorkerStatus(t *testing.T) {
 	op, err = svc.GetOperation(context.Background(), op.ID)
 	if err != nil { t.Fatal(err) }
 	if vm.Observed != domain.VMStopped || op.State != domain.OperationSucceeded { t.Fatalf("reconciled state not confirmed: vm=%#v op=%#v", vm, op) }
+}
+
+func TestReconcilePreservesUnknownWhenWorkerCannotConfirmState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer worker-secret" { w.WriteHeader(http.StatusUnauthorized); return }
+		if r.Method == http.MethodGet { w.WriteHeader(http.StatusNotFound); return }
+		var req struct { OperationID string `json:"operation_id"`; VMID string `json:"vm_id"`; ImageID string `json:"image_id"`; VCPUs int `json:"vcpus"`; MemoryBytes uint64 `json:"memory_bytes"` }
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"worker_id":"worker-a","vm_id":req.VMID,"operation_id":req.OperationID,"image_id":req.ImageID,"vcpus":req.VCPUs,"memory_bytes":req.MemoryBytes,"state":"Created"})
+	}))
+	defer server.Close()
+	svc, st := testService(t, server.URL)
+	vm, op, err := svc.CreateVM(context.Background(), controllerapi.CreateVMRequest{Name:"demo", VCPUs:1, MemoryMiB:512, ImageID:"ubuntu-demo"}, "unknown-worker-key")
+	if err != nil { t.Fatal(err) }
+	if err := st.WithTx(context.Background(), func(tx *sql.Tx) error {
+		if _, err := tx.Exec("UPDATE operations SET state='unknown' WHERE id=?", op.ID); err != nil { return err }
+		if _, err := tx.Exec("UPDATE vms SET observed_state='unknown' WHERE id=?", vm.ID); err != nil { return err }
+		_, err := tx.Exec("UPDATE reservations SET state='pending' WHERE vm_id=?", vm.ID)
+		return err
+	}); err != nil { t.Fatal(err) }
+	if err := svc.Reconcile(context.Background()); err == nil { t.Fatal("expected unresolved worker status to be reported") }
+	vm, err = svc.GetVM(context.Background(), vm.ID)
+	if err != nil { t.Fatal(err) }
+	op, err = svc.GetOperation(context.Background(), op.ID)
+	if err != nil { t.Fatal(err) }
+	var reservation string
+	if err := st.DB().QueryRow("SELECT state FROM reservations WHERE vm_id=?", vm.ID).Scan(&reservation); err != nil { t.Fatal(err) }
+	if vm.Observed != domain.VMUnknown || op.State != domain.OperationUnknown || reservation != "pending" {
+		t.Fatalf("unconfirmed outcome was altered: vm=%#v op=%#v reservation=%q", vm, op, reservation)
+	}
 }

@@ -97,11 +97,11 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
-	if h.service == nil { h.renderStatus(w, http.StatusServiceUnavailable, "dashboard", dashboardData{Error:"Controller service is not initialized."}); return }
+	if h.service == nil { h.renderStatus(w, http.StatusServiceUnavailable, "dashboard", dashboardData{Error:"Controller service is not initialized.", CSRFToken:h.csrfToken(r)}); return }
 	workers, err := h.service.ListWorkers(r.Context())
-	if err != nil { h.renderStatus(w, http.StatusInternalServerError, "dashboard", dashboardData{Error:"Could not load worker inventory."}); return }
+	if err != nil { h.renderStatus(w, http.StatusInternalServerError, "dashboard", dashboardData{Error:"Could not load worker inventory.", CSRFToken:h.csrfToken(r)}); return }
 	vms, err := h.service.ListVMs(r.Context())
-	if err != nil { h.renderStatus(w, http.StatusInternalServerError, "dashboard", dashboardData{Workers:workers, Error:"Could not load VM inventory."}); return }
+	if err != nil { h.renderStatus(w, http.StatusInternalServerError, "dashboard", dashboardData{Workers:workers, Error:"Could not load VM inventory.", CSRFToken:h.csrfToken(r)}); return }
 	rows := make([]vmRow, 0, len(vms))
 	refreshing := false
 	for _, vm := range vms {
@@ -122,20 +122,21 @@ func (h *Handler) createVM(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-	if err := r.ParseForm(); err != nil { h.renderStatus(w, http.StatusBadRequest, "new-vm", formData{Limits:h.limits, Error:"Invalid form submission."}); return }
+	if err := r.ParseForm(); err != nil { h.renderStatus(w, http.StatusBadRequest, "new-vm", formData{Limits:h.limits, Error:"Invalid form submission.", IdempotencyKey:newFormID(), CSRFToken:h.csrfToken(r)}); return }
+	if !h.verifyCSRF(r) { h.renderStatus(w, http.StatusForbidden, "new-vm", formData{Limits:h.limits, Error:"Invalid request token.", IdempotencyKey:r.FormValue("idempotency_key"), CSRFToken:h.csrfToken(r)}); return }
 	name := strings.TrimSpace(r.FormValue("name"))
 	vcpus, cpuErr := strconv.Atoi(r.FormValue("vcpus"))
 	memory, memErr := strconv.ParseUint(r.FormValue("memory_mib"), 10, 64)
 	imageID := r.FormValue("image_id")
 	if name == "" || len(name) > 128 || cpuErr != nil || vcpus < 1 || vcpus > h.limits.MaxVCPUs || memErr != nil || memory < 1 || memory > h.limits.MaxMemoryMiB || !h.allowedImage(imageID) {
-		h.renderStatus(w, http.StatusUnprocessableEntity, "new-vm", formData{Limits:h.limits, Error:"Check the VM name, vCPU, memory, and approved image values.", IdempotencyKey:r.FormValue("idempotency_key")})
+		h.renderStatus(w, http.StatusUnprocessableEntity, "new-vm", formData{Limits:h.limits, Error:"Check the VM name, vCPU, memory, and approved image values.", IdempotencyKey:r.FormValue("idempotency_key"), CSRFToken:h.csrfToken(r)})
 		return
 	}
 	key := r.FormValue("idempotency_key")
-	if !safeFormID(key) { h.renderStatus(w, http.StatusBadRequest, "new-vm", formData{Limits:h.limits, Error:"The form's idempotency key is invalid. Reload the form and retry."}); return }
+	if !safeFormID(key) { h.renderStatus(w, http.StatusBadRequest, "new-vm", formData{Limits:h.limits, Error:"The form's idempotency key is invalid. Reload the form and retry.", IdempotencyKey:newFormID(), CSRFToken:h.csrfToken(r)}); return }
 	_, op, err := h.service.CreateVM(r.Context(), controllerapi.CreateVMRequest{Name:name, VCPUs:vcpus, MemoryMiB:memory, ImageID:imageID}, key)
 	if err != nil {
-		h.renderStatus(w, http.StatusServiceUnavailable, "new-vm", formData{Limits:h.limits, Error:"Could not submit the VM request. Check worker health and capacity, then retry with the same form.", IdempotencyKey:key})
+		h.renderStatus(w, http.StatusServiceUnavailable, "new-vm", formData{Limits:h.limits, Error:"Could not submit the VM request. Check worker health and capacity, then retry with the same form.", IdempotencyKey:key, CSRFToken:h.csrfToken(r)})
 		return
 	}
 	http.Redirect(w, r, "/?notice="+template.URLQueryEscaper("VM request recorded; operation "+string(op.State)), http.StatusSeeOther)

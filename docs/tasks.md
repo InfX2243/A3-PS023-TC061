@@ -172,7 +172,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [x] UI dashboard tests assert VM name, worker placement, approved image, observed state, and latest operation are visible.
 - Implementation present: the UI includes name, vCPU, memory, and approved image fields; form submissions carry a stable idempotency key; the dashboard shows VM ID/name/host/resources/state and latest operation.
 - Acceptance: operator can create a VM from the browser and observe operation progress.
-- Status: **provisioning form/list implemented; verification pending**.
+- Status: **provisioning form/list implementation and automated UI/API tests pass; deployed browser verification pending**.
 - Depends on: T-12, T-15.
 
 ### T-17 — Add start/stop/status UI actions
@@ -180,7 +180,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [x] UI tests verify invalid actions are hidden for unknown state and the dashboard refreshes while the operation remains uncertain.
 - Implementation present: start/stop controls are shown for compatible observed states, action results return to the dashboard, and the dashboard refreshes while operations remain pending/dispatched/unknown.
 - Acceptance: complete create/start/stop/list journey is usable without manual API calls.
-- Status: **lifecycle UI implemented; verification pending**.
+- Status: **lifecycle UI implementation and automated tests pass; deployed browser verification pending**.
 - Depends on: T-13, T-14, T-16.
 
 ### T-18 — Harden security and operational defaults

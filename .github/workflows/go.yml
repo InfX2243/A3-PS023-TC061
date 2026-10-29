@@ -25,6 +25,10 @@ jobs:
         run: git diff --check
       - name: Go version
         run: go version
+      - name: Resolve module checksums
+        run: |
+          go mod tidy
+          cat go.sum
       - name: Test
         run: go test ./...
       - name: Vet

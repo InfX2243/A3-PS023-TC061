@@ -152,7 +152,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-05, T-12.
 
 ### T-14 — Add reconciliation and restart recovery
-- [x] CI passed status-based reconciliation tests for confirmed VM state.
+- [x] CI passed status-based reconciliation tests for confirmed VM state and preserves unknown state/reservations when a worker returns no status.
 - [x] Reconciliation leaves unresolved worker responses uncertain and preserves their reservations.
 - Implementation present: `internal/controller/reconcile.go` queries the assigned worker for unfinished operations and only updates metadata from a concrete status response. `cmd/controller/main.go` runs reconciliation on startup and periodically.
 - Acceptance: controller restart and worker response-loss tests do not silently corrupt state or free uncertain reservations.
@@ -176,7 +176,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-12, T-15.
 
 ### T-17 — Add start/stop/status UI actions
-- [x] CI passed UI start-action and CSRF tests; uncertain operations are represented in the dashboard and trigger refresh.
+- [x] CI passed UI start-action/CSRF tests and verifies unknown operations trigger dashboard refresh without exposing start/stop actions.
 - [ ] Verify invalid actions are not shown and pending/unknown operations refresh without being presented as success.
 - Implementation present: start/stop controls are shown for compatible observed states, action results return to the dashboard, and the dashboard refreshes while operations remain pending/dispatched/unknown.
 - Acceptance: complete create/start/stop/list journey is usable without manual API calls.
@@ -206,7 +206,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [ ] Run real KVM-backed create/start/stop on each validated host and capture evidence.
 - Implementation present: Go CI workflow runs formatting, tests, vet, and builds; controller service tests cover idempotency, timeout uncertainty, and reconciliation; a two-simulated-worker API journey is in `internal/controller/e2e_test.go`.
 - Acceptance: all required scenarios pass or have a clearly documented blocker with no false success claims.
-- Status: **CI passed formatting, module-file verification, `go test ./...`, `go vet ./...`, and both builds on commit `01f2bf9296d813fb47091c07ad34f9e9791ed885` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40933127353)). Real KVM-backed tests are still pending.
+- Status: **CI passed formatting, module-file verification, `go test ./...`, `go vet ./...`, and both builds on commit `7132fb4b1da7eb1df1b02d3ddd5663b8259d5217` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40933395022)). Real KVM-backed tests are still pending.
 - Depends on: T-17, T-19.
 
 ### T-21 — Package demo and teardown

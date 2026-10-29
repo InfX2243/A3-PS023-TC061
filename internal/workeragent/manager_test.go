@@ -172,3 +172,17 @@ func TestLifecycleHandlerRequiresWorkerBearerToken(t *testing.T) {
 	if response.Code != http.StatusUnauthorized { t.Fatalf("status = %d, want 401", response.Code) }
 	if runtime.launches != 0 { t.Fatalf("unauthorized request launched %d VMMs", runtime.launches) }
 }
+
+func TestOperationIDCannotBeReusedAcrossLifecycleKinds(t *testing.T) {
+	manager, _ := testManager(t)
+	defer manager.Close()
+	req := validCreate()
+	if _, err := manager.Prepare(context.Background(), req); err != nil { t.Fatal(err) }
+	if _, err := manager.Start(context.Background(), req.OperationID, req.VMID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("start reused prepare operation ID: err=%v, want conflict", err)
+	}
+	if _, err := manager.Start(context.Background(), "op-start", req.VMID); err != nil { t.Fatal(err) }
+	if _, err := manager.Stop(context.Background(), "op-start", req.VMID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stop reused start operation ID: err=%v, want conflict", err)
+	}
+}

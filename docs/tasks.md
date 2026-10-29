@@ -24,10 +24,11 @@ The user explicitly authorized continuing without waiting for environment verifi
 - Depends on: none.
 
 ### T-01 — Verify KVM and Cloud Hypervisor feasibility
-- [ ] Choose candidate worker environment(s).
-- [ ] Record OS/kernel, CPU virtualization support, `/dev/kvm` permissions, Cloud Hypervisor version, and guest image.
-- [ ] Boot and stop the exact guest image on each intended worker.
-- [ ] Test AWS candidate instance type before creating long-lived resources.
+- [ ] Choose candidate worker environment(s). **Blocked:** the intended worker target (specific existing Linux hosts vs AWS instance type/region) has not been supplied or selected.
+- [ ] Record OS/kernel, CPU virtualization support, `/dev/kvm` permissions, Cloud Hypervisor version, and guest image. On each proposed Linux worker, capture `uname -a`, `lscpu`, `ls -l /dev/kvm`, `cloud-hypervisor --version`, and the exact guest-image identifier/checksum.
+- [ ] Boot and stop the exact guest image on each intended worker. Record the exact command/config, successful status query, and shutdown result; unit tests do not substitute for this.
+- [ ] Test AWS candidate instance type before creating long-lived resources. Do not launch long-lived resources until a short-lived candidate proves usable `/dev/kvm` and boots the chosen guest.
+- Status: **not verified**. No worker host, AWS instance type/region, KVM device, hypervisor version, or guest-boot evidence has been provided. macOS development-machine tests do not establish Linux worker feasibility.
 - Acceptance: evidence demonstrates the intended deployment path works, or a documented fallback is selected.
 - Depends on: T-00.
 

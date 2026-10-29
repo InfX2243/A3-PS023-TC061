@@ -74,6 +74,7 @@ func TestOperatorCredentialsMustBePairedAndStrong(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := Defaults()
 			cfg.OperatorUsername, cfg.OperatorPassword = tc.username, tc.password
+			cfg.OperatorToken = "session-signing-token"
 			err := cfg.Validate()
 			if (err != nil) != tc.wantErr { t.Fatalf("Validate() error = %v, wantErr %v", err, tc.wantErr) }
 		})

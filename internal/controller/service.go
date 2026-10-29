@@ -162,6 +162,13 @@ func scanOperation(row rowScanner) (domain.Operation, error) {
 
 const operationColumns = "id, vm_id, type, idempotency_key, state, attempt, error_code, error_message, created_at, updated_at"
 
+
+func (s *Service) LatestOperation(ctx context.Context, vmID string) (domain.Operation, error) {
+	op, err := scanOperation(s.store.DB().QueryRowContext(ctx, "SELECT "+operationColumns+" FROM operations WHERE vm_id=? ORDER BY created_at DESC, id DESC LIMIT 1", vmID))
+	if errors.Is(err, sql.ErrNoRows) { return domain.Operation{}, controllerapi.ErrNotFound }
+	return op, err
+}
+
 func (s *Service) GetOperation(ctx context.Context, id string) (domain.Operation, error) {
 	op, err := scanOperation(s.store.DB().QueryRowContext(ctx, "SELECT "+operationColumns+" FROM operations WHERE id = ?", id))
 	if errors.Is(err, sql.ErrNoRows) { return domain.Operation{}, controllerapi.ErrNotFound }

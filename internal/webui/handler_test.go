@@ -157,3 +157,44 @@ func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
 	for _, expected := range []string{"demo", "worker-a", "ubuntu-demo", "start: unknown"} { if !strings.Contains(response.Body.String(), expected) { t.Fatalf("dashboard omitted %q", expected) } }
 	if strings.Contains(response.Body.String(), ">Start</button>") || strings.Contains(response.Body.String(), ">Stop</button>") { t.Fatal("dashboard offered lifecycle action for unknown state") }
 }
+
+func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
+	response := httptest.NewRecorder()
+	testUI().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/docs", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("documentation status = %d; body=%s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\""} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("documentation page omitted %q", expected)
+		}
+	}
+	if strings.Contains(body, "name=\"token\"") {
+		t.Fatal("public documentation should not render the operator login form")
+	}
+}
+
+func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testing.T) {
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	testUI().ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	testUI().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("dashboard status = %d", response.Code)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "href=\"/docs\"") {
+		t.Fatal("dashboard navigation omitted documentation link")
+	}
+	if strings.Contains(body, "Your compute fleet, at a glance.") {
+		t.Fatal("dashboard retained the duplicate hero message")
+	}
+	if strings.Contains(body, "Operational signals") {
+		t.Fatal("dashboard retained a redundant inventory summary")
+	}
+}

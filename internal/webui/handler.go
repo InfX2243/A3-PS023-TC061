@@ -2,8 +2,6 @@ package webui
 
 import (
 	"context"
-	"net/url"
-	"strconv"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"

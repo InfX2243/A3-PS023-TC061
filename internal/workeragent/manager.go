@@ -53,6 +53,7 @@ type CreateRequest struct {
 
 type VMReport struct {
 	WorkerID    string `json:"worker_id"`
+	Name        string `json:"name"`
 	VMID        string `json:"vm_id"`
 	OperationID string `json:"operation_id"`
 	ImageID     string `json:"image_id"`
@@ -233,7 +234,7 @@ func (m *Manager) Prepare(ctx context.Context, req CreateRequest) (VMReport, err
 		return VMReport{}, fmt.Errorf("create VM in Cloud Hypervisor: %w", err)
 	}
 	now := m.now().UTC()
-	report := VMReport{WorkerID: m.cfg.WorkerID, VMID: req.VMID, OperationID: req.OperationID, ImageID: req.ImageID, VCPUs: req.VCPUs, MemoryBytes: req.MemoryBytes, State: string(cloudhypervisor.StatusCreated), CreatedAt: now, UpdatedAt: now}
+	report := VMReport{WorkerID: m.cfg.WorkerID, Name: req.Name, VMID: req.VMID, OperationID: req.OperationID, ImageID: req.ImageID, VCPUs: req.VCPUs, MemoryBytes: req.MemoryBytes, State: string(cloudhypervisor.StatusCreated), CreatedAt: now, UpdatedAt: now}
 	m.vms[req.VMID] = &vmEntry{report: report, client: hv, process: proc, socket: socket, vmConfig: vmConfig}
 	m.ops[req.OperationID] = req.VMID
 	return report, nil
@@ -244,7 +245,7 @@ func (m *Manager) Start(ctx context.Context, operationID, vmID string) (VMReport
 	defer m.mu.Unlock()
 	entry, ok := m.vms[vmID]
 	if !ok { return VMReport{}, ErrNotFound }
-	if operationID == "" { return VMReport{}, fmt.Errorf("%w: operation_id is required", ErrInvalid) }
+	if !idPattern.MatchString(operationID) { return VMReport{}, fmt.Errorf("%w: operation_id must be a safe identifier", ErrInvalid) }
 	if entry.report.State == string(cloudhypervisor.StatusRunning) { return entry.report, nil }
 	if entry.report.State != string(cloudhypervisor.StatusCreated) && entry.report.State != string(cloudhypervisor.StatusShutdown) {
 		return VMReport{}, fmt.Errorf("%w: cannot start VM in state %s", ErrConflict, entry.report.State)

@@ -70,6 +70,8 @@ The user explicitly authorized continuing without waiting for environment verifi
 ## Phase 2 — Worker vertical slice
 
 ### T-06 — Implement worker health and inventory
+- Implementation started: `internal/workerhealth/registry.go` tracks worker heartbeats, hostname, available memory, configured memory cap, Cloud Hypervisor health, and healthy/stale/unreachable states (default stale threshold: 30 seconds). `MarkUnreachable` supports explicit failed probes; a subsequent valid heartbeat restores reported health. `internal/workerhealth/http.go` exposes authenticated `POST /api/v1/worker/heartbeat` and `GET /api/v1/workers`; no secret means access is closed. Controller registers the endpoints. Tests cover stale classification, VMM health, invalid capacity, authentication, and unreachable recovery.
+- Verification pending: tests cannot be executed in the GitHub-connected environment. The current registry is in-memory and needs persistent worker storage/integration in a later step; no real worker agent or probe loop has been deployed yet. Keep T-06 unchecked until tests and integration checks pass.
 - [ ] Report worker ID, heartbeat, available memory, configured cap, and Cloud Hypervisor health.
 - [ ] Add worker authentication.
 - [ ] Mark stale heartbeat as unavailable using a documented threshold.

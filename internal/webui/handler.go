@@ -42,8 +42,8 @@ type Handler struct {
 }
 
 type vmRow struct { VM domain.VM; Operation domain.Operation; HasOperation bool }
-type dashboardData struct { Workers []domain.Worker; VMs []vmRow; Error string; Notice string; Refreshing bool }
-type formData struct { Limits Limits; Error string; IdempotencyKey string }
+type dashboardData struct { Workers []domain.Worker; VMs []vmRow; Error string; Notice string; Refreshing bool; CSRFToken string }
+type formData struct { Limits Limits; Error string; IdempotencyKey string; CSRFToken string }
 
 func NewHandler(service Service, operatorToken string, limits Limits, secureCookie bool) *Handler {
 	return &Handler{service: service, token: operatorToken, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Funcs(template.FuncMap{"divMiB": func(v uint64) uint64 { return v / (1024 * 1024) }}).Parse(pageTemplates))}
@@ -88,6 +88,8 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	if err := r.ParseForm(); err != nil || !h.verifyCSRF(r) { http.Error(w, "invalid request token", http.StatusForbidden); return }
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: h.secureCookie, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
@@ -107,13 +109,13 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 		if err == nil && (op.State == domain.OperationPending || op.State == domain.OperationDispatched || op.State == domain.OperationUnknown) { refreshing = true }
 		rows = append(rows, vmRow{VM:vm, Operation:op, HasOperation:err == nil})
 	}
-	h.render(w, "dashboard", dashboardData{Workers:workers, VMs:rows, Notice:r.URL.Query().Get("notice"), Error:r.URL.Query().Get("error"), Refreshing:refreshing})
+	h.render(w, "dashboard", dashboardData{Workers:workers, VMs:rows, Notice:r.URL.Query().Get("notice"), Error:r.URL.Query().Get("error"), Refreshing:refreshing, CSRFToken:h.csrfToken(r)})
 }
 
 func (h *Handler) newVMPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
-	h.render(w, "new-vm", formData{Limits:h.limits, IdempotencyKey:newFormID()})
+	h.render(w, "new-vm", formData{Limits:h.limits, CSRFToken:h.csrfToken(r), IdempotencyKey:newFormID()})
 }
 
 func (h *Handler) createVM(w http.ResponseWriter, r *http.Request) {
@@ -148,6 +150,8 @@ func (h *Handler) stopVM(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) lifecycleAction(w http.ResponseWriter, r *http.Request, start bool) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	if err := r.ParseForm(); err != nil || !h.verifyCSRF(r) { http.Error(w, "invalid request token", http.StatusForbidden); return }
 	var op domain.Operation
 	var err error
 	if start { _, op, err = h.service.StartVM(r.Context(), r.PathValue("vmID")) } else { _, op, err = h.service.StopVM(r.Context(), r.PathValue("vmID")) }
@@ -189,6 +193,21 @@ func (h *Handler) authenticated(r *http.Request) bool {
 	return hmac.Equal(got, mac.Sum(nil))
 }
 
+
+func (h *Handler) csrfToken(r *http.Request) string {
+	cookie, err := r.Cookie(sessionCookie)
+	if err != nil || h.token == "" { return "" }
+	mac := hmac.New(sha256.New, []byte(h.token))
+	_, _ = mac.Write([]byte("csrf:" + cookie.Value))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (h *Handler) verifyCSRF(r *http.Request) bool {
+	expected := h.csrfToken(r)
+	got := r.FormValue("csrf_token")
+	return expected != "" && len(got) == len(expected) && subtle.ConstantTimeCompare([]byte(got), []byte(expected)) == 1
+}
+
 func (h *Handler) headers(w http.ResponseWriter) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
@@ -217,6 +236,6 @@ func safeFormID(value string) bool {
 
 const pageTemplates = `
 {{define "login"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>VM Controller — Sign in</title></head><body><main><h1>VM Controller</h1><h2>Sign in</h2>{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}<form method="post" action="/login"><label>Operator token <input type="password" name="token" autocomplete="current-password" required></label><button type="submit">Sign in</button></form></main></body></html>{{end}}
-{{define "dashboard"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>VM Controller</title>{{if .Refreshing}}<meta http-equiv="refresh" content="5">{{end}}</head><body><header><h1>VM Controller</h1><form method="post" action="/logout"><button type="submit">Sign out</button></form></header><main>{{if .Notice}}<p role="status">{{.Notice}}</p>{{end}}{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}<h2>Workers</h2><table><thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Heartbeat</th><th>Available memory (MiB)</th><th>Cap (MiB)</th></tr></thead><tbody>{{range .Workers}}<tr><td>{{.ID}}</td><td>{{.Name}}</td><td>{{.State}}</td><td>{{if .LastHeartbeat.IsZero}}Never{{else}}{{.LastHeartbeat}}{{end}}</td><td>{{divMiB .AvailableMemoryBytes}}</td><td>{{divMiB .MemoryLimitBytes}}</td></tr>{{else}}<tr><td colspan="6">No workers configured.</td></tr>{{end}}</tbody></table><h2>Virtual machines</h2><p><a href="/vms/new">Prepare a VM</a></p><table><thead><tr><th>ID</th><th>Name</th><th>Worker</th><th>vCPU</th><th>Memory (MiB)</th><th>Image</th><th>State</th><th>Latest operation</th><th>Actions</th></tr></thead><tbody>{{range .VMs}}<tr><td>{{.VM.ID}}</td><td>{{.VM.Name}}</td><td>{{.VM.WorkerID}}</td><td>{{.VM.VCPUs}}</td><td>{{divMiB .VM.MemoryBytes}}</td><td>{{.VM.ImageID}}</td><td>{{.VM.Observed}}</td><td>{{if .HasOperation}}{{.Operation.Type}}: {{.Operation.State}}{{else}}—{{end}}</td><td>{{if or (eq .VM.Observed "stopped") (eq .VM.Observed "defined")}}<form method="post" action="/vms/{{.VM.ID}}/start"><button type="submit">Start</button></form>{{end}}{{if eq .VM.Observed "running"}}<form method="post" action="/vms/{{.VM.ID}}/stop"><button type="submit">Stop</button></form>{{end}}</td></tr>{{else}}<tr><td colspan="9">No VMs yet.</td></tr>{{end}}</tbody></table></main></body></html>{{end}}
-{{define "new-vm"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Prepare VM</title></head><body><main><h1>Prepare a VM</h1>{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}<form method="post" action="/vms"><input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}"><label>Name <input name="name" maxlength="128" required></label><label>vCPUs <input type="number" name="vcpus" min="1" max="{{.Limits.MaxVCPUs}}" value="1" required></label><label>Memory (MiB) <input type="number" name="memory_mib" min="1" max="{{.Limits.MaxMemoryMiB}}" value="1024" required></label><label>Approved image <select name="image_id" required>{{range .Limits.AllowedImages}}<option value="{{.}}">{{.}}</option>{{end}}</select></label><button type="submit">Prepare VM</button></form><p><a href="/">Back to dashboard</a></p></main></body></html>{{end}}
+{{define "dashboard"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>VM Controller</title>{{if .Refreshing}}<meta http-equiv="refresh" content="5">{{end}}</head><body><header><h1>VM Controller</h1><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">Sign out</button></form></header><main>{{if .Notice}}<p role="status">{{.Notice}}</p>{{end}}{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}<h2>Workers</h2><table><thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Heartbeat</th><th>Available memory (MiB)</th><th>Cap (MiB)</th></tr></thead><tbody>{{range .Workers}}<tr><td>{{.ID}}</td><td>{{.Name}}</td><td>{{.State}}</td><td>{{if .LastHeartbeat.IsZero}}Never{{else}}{{.LastHeartbeat}}{{end}}</td><td>{{divMiB .AvailableMemoryBytes}}</td><td>{{divMiB .MemoryLimitBytes}}</td></tr>{{else}}<tr><td colspan="6">No workers configured.</td></tr>{{end}}</tbody></table><h2>Virtual machines</h2><p><a href="/vms/new">Prepare a VM</a></p><table><thead><tr><th>ID</th><th>Name</th><th>Worker</th><th>vCPU</th><th>Memory (MiB)</th><th>Image</th><th>State</th><th>Latest operation</th><th>Actions</th></tr></thead><tbody>{{range .VMs}}<tr><td>{{.VM.ID}}</td><td>{{.VM.Name}}</td><td>{{.VM.WorkerID}}</td><td>{{.VM.VCPUs}}</td><td>{{divMiB .VM.MemoryBytes}}</td><td>{{.VM.ImageID}}</td><td>{{.VM.Observed}}</td><td>{{if .HasOperation}}{{.Operation.Type}}: {{.Operation.State}}{{else}}—{{end}}</td><td>{{if or (eq .VM.Observed "stopped") (eq .VM.Observed "defined")}}<form method="post" action="/vms/{{.VM.ID}}/start"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button type="submit">Start</button></form>{{end}}{{if eq .VM.Observed "running"}}<form method="post" action="/vms/{{.VM.ID}}/stop"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><button type="submit">Stop</button></form>{{end}}</td></tr>{{else}}<tr><td colspan="9">No VMs yet.</td></tr>{{end}}</tbody></table></main></body></html>{{end}}
+{{define "new-vm"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Prepare VM</title></head><body><main><h1>Prepare a VM</h1>{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}<form method="post" action="/vms"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}"><label>Name <input name="name" maxlength="128" required></label><label>vCPUs <input type="number" name="vcpus" min="1" max="{{.Limits.MaxVCPUs}}" value="1" required></label><label>Memory (MiB) <input type="number" name="memory_mib" min="1" max="{{.Limits.MaxMemoryMiB}}" value="1024" required></label><label>Approved image <select name="image_id" required>{{range .Limits.AllowedImages}}<option value="{{.}}">{{.}}</option>{{end}}</select></label><button type="submit">Prepare VM</button></form><p><a href="/">Back to dashboard</a></p></main></body></html>{{end}}
 `;

@@ -13,6 +13,8 @@ Planning branch: `docs/mvp-requirements-design-task-plan`
 5. [AWS deployment plan](./aws-deployment.md) — prerequisites, network layout, rollout, validation, and cost guardrails.
 6. [AWS worker feasibility gate](./deployment/aws-worker-validation.md) — selected EC2 candidate, pinned VMM/guest candidates, and required runtime evidence.
 7. [Cloud Hypervisor v54.0 API contract](./cloudhypervisor-api-v54.md) — pinned endpoint and schema contract used by the Go adapter.
+8. [Security checklist](./security-checklist.md) — code controls and deployment-only checks.
+9. [Worker deployment runbook](./deployment/worker-deployment.md) — systemd setup, worker registration, acceptance sequence, and teardown.
 
 ## MVP north star
 
@@ -24,4 +26,4 @@ Cloud Hypervisor requires access to KVM. The current candidate is one temporary 
 
 ## Current status
 
-These documents define the proposed MVP and implementation sequence. They do not imply that implementation, AWS deployment, or acceptance tests have already completed. Update task checkboxes and evidence links only after verification.
+Implementation is proceeding ahead of full local and AWS verification per user direction. The task plan distinguishes implemented code from unexecuted tests and deployment-only evidence; no pending check should be interpreted as passing.

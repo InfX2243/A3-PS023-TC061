@@ -1,0 +1,31 @@
+[Unit]
+Description=Aiori Compute Controller
+Documentation=https://github.com/InfX2243/A3-PS023-TC061
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aiori
+Group=aiori
+WorkingDirectory=/var/lib/aiori
+EnvironmentFile=/etc/aiori/controller.env
+ExecStart=/usr/local/bin/aiori-controller -config /etc/aiori/config.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/aiori
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

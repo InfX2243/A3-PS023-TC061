@@ -311,7 +311,7 @@ func (s *Service) StopVM(ctx context.Context, vmID string) (domain.VM, domain.Op
 	report, callErr := s.workers.stop(ctx, endpoint, vmID, opID)
 	switch {
 	case callErr == nil && report.State == "Shutdown":
-		err = s.finishOperation(ctx, vmID, opID, domain.OperationSucceeded, domain.VMStopped, domain.VMStopped, "released", "", "")
+		err = s.finishOperation(ctx, vmID, opID, domain.OperationSucceeded, domain.VMStopped, domain.VMStopped, "active", "", "")
 	case isUnknownWorkerOutcome(callErr) || (callErr == nil && report.State != "Shutdown"):
 		err = s.finishOperation(ctx, vmID, opID, domain.OperationUnknown, domain.VMStopped, domain.VMUnknown, "active", "outcome_unknown", "worker outcome requires reconciliation")
 	default:

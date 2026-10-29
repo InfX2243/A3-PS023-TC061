@@ -93,7 +93,7 @@ func (h *Handler) authorize(w http.ResponseWriter, r *http.Request) bool {
 
 func (h *Handler) ready(w http.ResponseWriter) bool {
 	if h.service == nil {
-		writeJSON(w, http.StatusServiceUnavailable, errorPayload("service_unavailable", "controller service is not initialized", ""))
+		writeJSON(w, http.StatusServiceUnavailable, errorPayload("service_unavailable", "controller service is not initialized", requestIDFrom(w)))
 		return false
 	}
 	return true

@@ -97,6 +97,9 @@ func (execRuntime) Launch(ctx context.Context, binary, socket string, requestTim
 	if err := os.MkdirAll(filepath.Dir(socket), 0700); err != nil {
 		return nil, nil, fmt.Errorf("create VM runtime directory: %w", err)
 	}
+	if err := os.Chmod(filepath.Dir(socket), 0700); err != nil {
+		return nil, nil, fmt.Errorf("restrict VM runtime directory permissions: %w", err)
+	}
 	// A stale socket may remain after an unclean worker shutdown. The manager
 	// serializes launches and owns this VM-specific socket path.
 	_ = os.Remove(socket)
@@ -117,6 +120,12 @@ func (execRuntime) Launch(ctx context.Context, binary, socket string, requestTim
 	defer ticker.Stop()
 	for {
 		if err := client.Ping(ctx); err == nil {
+			if err := os.Chmod(socket, 0600); err != nil {
+				_ = proc.Kill()
+				_ = proc.Wait()
+				_ = os.Remove(socket)
+				return nil, nil, fmt.Errorf("restrict Cloud Hypervisor socket permissions: %w", err)
+			}
 			return client, proc, nil
 		}
 		select {
@@ -162,8 +171,8 @@ func NewManagerWithRuntime(cfg Config, runtime Runtime) (*Manager, error) {
 	if !filepath.IsAbs(cfg.RuntimeDir) {
 		return nil, errors.New("runtime_dir must be an absolute path")
 	}
-	if strings.TrimSpace(cfg.CloudHypervisor) == "" {
-		return nil, errors.New("cloud_hypervisor binary path must not be empty")
+	if strings.TrimSpace(cfg.CloudHypervisor) == "" || !filepath.IsAbs(cfg.CloudHypervisor) {
+		return nil, errors.New("cloud_hypervisor binary path must be an absolute path")
 	}
 	if cfg.MaxVCPUs < 1 || cfg.MaxVCPUs > 256 || cfg.MaxMemoryBytes == 0 {
 		return nil, errors.New("worker resource limits must be positive")

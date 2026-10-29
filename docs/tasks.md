@@ -50,6 +50,8 @@ The user explicitly authorized continuing without waiting for environment verifi
 - Depends on: T-02.
 
 ### T-04 — Define domain models and state transitions
+- Implementation started: `internal/domain/models.go` defines VM, worker, reservation, and operation models plus guarded VM/operation state transitions. `internal/domain/models_test.go` covers allowed/denied transitions and nil inputs.
+- Verification pending: the GitHub-connected editing environment cannot execute `go test ./...`; keep T-04 unchecked until tests run successfully.
 - [ ] Define VM, worker, reservation, and operation models.
 - [ ] Encode allowed lifecycle transitions.
 - [ ] Add unit tests for valid and invalid transitions.

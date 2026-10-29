@@ -90,7 +90,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [x] Implement typed calls for VM prepare/create, start, stop, and status.
 - [x] Add bounded timeouts and structured errors.
 - [x] Align memory size to v54.0 schema (integer bytes), reject non-positive configured memory, and accept all documented VM states including `BreakPoint`.
-- [x] CI ran `gofmt` and `go test ./...`; fake Unix-socket tests passed on commit `7132fb4b1da7eb1df1b02d3ddd5663b8259d5217` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40933395022)).
+- [x] CI ran `gofmt` and `go test ./...`; fake Unix-socket tests passed on commit `9307b0f6a8f87ff3efe3835310ea136af8abf51b` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40933663134)).
 - [ ] Run a real Cloud Hypervisor v54.0 smoke test on an AWS candidate host before deployment acceptance.
 - Acceptance: adapter tests pass against the fake API; host smoke test is recorded before two-worker rollout.
 - Status: **implementation and automated tests verified; host runtime smoke test pending**. CI tests do not establish that `/dev/kvm` or the selected guest image works on a real EC2 instance.
@@ -206,7 +206,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [ ] Run real KVM-backed create/start/stop on each validated host and capture evidence.
 - Implementation present: Go CI workflow runs formatting, tests, vet, and builds; controller service tests cover idempotency, timeout uncertainty, and reconciliation; a two-simulated-worker API journey is in `internal/controller/e2e_test.go`.
 - Acceptance: all required scenarios pass or have a clearly documented blocker with no false success claims.
-- Status: **CI passed formatting, module-file verification, `go test ./...`, `go vet ./...`, and both builds on commit `7132fb4b1da7eb1df1b02d3ddd5663b8259d5217` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40933395022)). Real KVM-backed tests are still pending.
+- Status: **CI passed formatting, module-file verification, `go test ./...`, `go vet ./...`, and both builds on commit `9307b0f6a8f87ff3efe3835310ea136af8abf51b` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40933663134)). Real KVM-backed tests are still pending.
 - Depends on: T-17, T-19.
 
 ### T-21 — Package demo and teardown

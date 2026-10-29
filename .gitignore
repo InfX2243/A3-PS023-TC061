@@ -1,0 +1,18 @@
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+config.local.json
+*.secret
+
+# Runtime data and logs
+data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Build artifacts
+/bin/
+/dist/
+coverage.out

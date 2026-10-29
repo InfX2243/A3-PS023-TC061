@@ -2,70 +2,42 @@
 
 This repository contains the code and resources for projects developed during the AIORI-3 Hackathon.
 
-## 🎥 Project Presentation
+## Project
 
-**Project:** Minimal Two-Node Cloud Hypervisor VM Controller
+**Minimal Two-Node Cloud Hypervisor VM Controller** — a prototype controller for managing VMs across two KVM-capable Linux workers.
 
 **Team:** CloudOpsCrew
-
-Watch our project presentation for AIORI Hackathon 3 on YouTube:
-
-[▶️ Watch the Project Presentation](https://youtu.be/x6dSHQatmrY)
-
-## 👥 Team CloudOpsCrew
 
 - **Abid Shaikh** — Controller Architecture & Integration
 - **Umar Ansari** — Worker Agents & VM Lifecycle
 - **Mentor:** Dr. Zainab Mirza
 
-## 🎯 Project Overview
+[Project presentation](https://youtu.be/x6dSHQatmrY)
 
-The Minimal Two-Node Cloud Hypervisor VM Controller aims to provide a lightweight, secure, and reliable solution for managing virtual machines across two KVM-enabled Linux hosts.
+## MVP documentation
 
-The project focuses on:
+Start with the [MVP documentation index](docs/README.md), [requirements](docs/requirements.md), [design](docs/design.md), and [task plan](docs/tasks.md).
 
-- Controller architecture and system integration
-- Memory-aware host selection and resource reservations
-- Worker-agent communication and VM lifecycle management
-- Timeout handling, failure recovery, and resource cleanup
-- Reliable, resource-aware virtual machine orchestration
+Cloud Hypervisor requires KVM. Worker environment feasibility remains a deployment gate; this repository does not claim that KVM or an AWS worker configuration has been verified.
 
-Developed as part of **AIORI Hackathon 3**.
+## Development setup
 
-## 🛠️ MVP implementation plan
-
-The current planning branch contains the implementation requirements, architecture/design, dependency-ordered task checklist, AI-driven development workflow, and AWS deployment plan.
-
-Start with the [MVP documentation index](docs/README.md) and complete one verified task at a time using [docs/tasks.md](docs/tasks.md).
-
-**AWS prerequisite:** Cloud Hypervisor requires KVM. The deployment plan begins with validating `/dev/kvm` and booting the intended guest on the exact candidate worker configuration before provisioning the full environment.
-
-## 🧑‍💻 Development setup and baseline
-
-This branch is currently a planning/documentation baseline, not yet a buildable application. The repository files inspected for this baseline include the root README, the MVP task plan, and `src/README.md`; the latter is a placeholder instructing contributors to add implementation files.
-
-### Inspect a clean checkout
+The initial controller foundation uses Go and the standard library. Use Go 1.23 or newer.
 
 ```sh
-git clone https://github.com/InfX2243/A3-PS023-TC061.git
-cd A3-PS023-TC061
-git status --short
-find . -maxdepth 3 -type f -not -path './.git/*' | sort
+go test ./...
+go run ./cmd/controller -config config.example.json
 ```
 
-For the current planning branch, check it out after cloning:
+The example config binds to `127.0.0.1:8080` and uses local relative paths. It contains no credentials. The current service exposes `GET /healthz`.
 
-```sh
-git fetch origin
-git switch docs/mvp-requirements-design-task-plan
-```
+Runtime secrets are read from environment variables, not JSON config:
 
-### Build and test status
+- `VM_CONTROLLER_OPERATOR_TOKEN`
+- `VM_CONTROLLER_WORKER_SHARED_SECRET`
 
-- **Language/toolchain:** Not established in the inspected application files; no application source or dependency manifest is present in this baseline.
-- **Build command:** Not available yet; no build configuration was found in the inspected files.
-- **Test command:** Not available yet; no test configuration or test suite was found in the inspected files.
-- **Runtime checks:** Not run. This documentation-only inspection does not establish KVM or Cloud Hypervisor availability.
-- **Next step:** Follow T-01 in `docs/tasks.md` to collect worker-environment feasibility evidence before locking implementation decisions.
+These are reserved for subsequent authenticated API/worker tasks and are not yet used by the health endpoint. Do not commit real credentials. Runtime database files under `data/` are ignored by Git.
 
-Do not treat the absence of build/test commands as a passing build or test result. Add the appropriate toolchain, build, and test commands when the implementation foundation is selected.
+## Current verification status
+
+The GitHub-connected editing environment cannot execute Go commands or access a KVM worker. The code and tests have been added, but build/test results have not been run in this environment. Run `go test ./...` from a clean checkout before treating the foundation as verified.

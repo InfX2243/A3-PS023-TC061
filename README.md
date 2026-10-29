@@ -31,3 +31,11 @@ The project focuses on:
 - Reliable, resource-aware virtual machine orchestration
 
 Developed as part of **AIORI Hackathon 3**.
+
+## 🛠️ MVP implementation plan
+
+The current planning branch contains the implementation requirements, architecture/design, dependency-ordered task checklist, AI-driven development workflow, and AWS deployment plan.
+
+Start with the [MVP documentation index](docs/README.md) and complete one verified task at a time using [docs/tasks.md](docs/tasks.md).
+
+**AWS prerequisite:** Cloud Hypervisor requires KVM. The deployment plan begins with validating `/dev/kvm` and booting the intended guest on the exact candidate worker configuration before provisioning the full environment.

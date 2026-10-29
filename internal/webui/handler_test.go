@@ -238,6 +238,12 @@ func TestUIEnhancementAssetAndFormLoadingStates(t *testing.T) {
 		t.Fatalf("asset content type = %q", assetResponse.Header().Get("Content-Type"))
 	}
 	asset := assetResponse.Body.String()
+	if strings.Contains(asset, "\\n") {
+		t.Fatal("enhancement asset contains escaped line breaks instead of JavaScript source lines")
+	}
+	if !strings.HasPrefix(asset, "// Progressive enhancements for the server-rendered operator UI.\n(function () {") {
+		t.Fatal("enhancement asset is not emitted as a valid source file")
+	}
 	for _, expected := range []string{"IntersectionObserver", "aria-current", "Signing in…", "Signing out…", "prefers-reduced-motion"} {
 		if !strings.Contains(asset, expected) {
 			t.Fatalf("enhancement asset omitted %q", expected)

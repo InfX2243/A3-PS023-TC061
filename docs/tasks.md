@@ -11,7 +11,7 @@ Work strictly from top to bottom unless a dependency requires a documented chang
 
 ## Execution note (2026-10-29)
 
-The user explicitly authorized continuing without waiting for environment verification. T-01 feasibility checks are therefore deferred, not passed; no KVM/AWS runtime evidence is available. The existing design proposes Go, a controller-served lightweight UI, SQLite, and systemd, so a provisional Go foundation was added while the feasibility/version/image decisions remain open. T-03 remains unchecked until a Go build/test run verifies the new scaffold.
+The user selected AWS EC2 as the worker environment and asked to resolve T-01/T-02 before any further T-07 work. The initial feasibility candidate is one temporary `c8i.xlarge` in `ap-south-1`, Ubuntu Server 24.04.5 LTS x86-64 host, Cloud Hypervisor v54.0, and the versioned Ubuntu 24.04 LTS cloud image build dated 2026-10-17. Decisions and the evidence procedure are documented in [AWS worker feasibility gate](./deployment/aws-worker-validation.md). These are selected candidates, not deployment/test evidence: no AWS instance has been launched and no guest has booted. T-01 and T-02 remain blocked until the documented runtime evidence is captured. Do not advance T-07.
 
 ## Phase 0 — Feasibility and repository baseline
 
@@ -24,20 +24,21 @@ The user explicitly authorized continuing without waiting for environment verifi
 - Depends on: none.
 
 ### T-01 — Verify KVM and Cloud Hypervisor feasibility
-- [ ] Choose candidate worker environment(s). **Blocked:** the intended worker target (specific existing Linux hosts vs AWS instance type/region) has not been supplied or selected.
-- [ ] Record OS/kernel, CPU virtualization support, `/dev/kvm` permissions, Cloud Hypervisor version, and guest image. On each proposed Linux worker, capture `uname -a`, `lscpu`, `ls -l /dev/kvm`, `cloud-hypervisor --version`, and the exact guest-image identifier/checksum.
-- [ ] Boot and stop the exact guest image on each intended worker. Record the exact command/config, successful status query, and shutdown result; unit tests do not substitute for this.
-- [ ] Test AWS candidate instance type before creating long-lived resources. Do not launch long-lived resources until a short-lived candidate proves usable `/dev/kvm` and boots the chosen guest.
-- Status: **not verified**. No worker host, AWS instance type/region, KVM device, hypervisor version, or guest-boot evidence has been provided. macOS development-machine tests do not establish Linux worker feasibility.
-- Acceptance: evidence demonstrates the intended deployment path works, or a documented fallback is selected.
+- [x] Select a specific AWS candidate for the short-lived feasibility run: one `c8i.xlarge` in `ap-south-1` (Mumbai). AWS's published family support and regional type listing support this as a candidate; actual instance behavior is not yet verified.
+- [ ] Record actual EC2 AMI ID, OS/kernel, CPU virtualization flags, `/dev/kvm` permissions, Cloud Hypervisor v54.0 binary checksum, and exact guest-image SHA-256. Required commands and redaction guidance are in [AWS worker feasibility gate](./deployment/aws-worker-validation.md).
+- [ ] Boot and stop the pinned Ubuntu cloud image on the candidate instance. Record reproducible config/commands, running and stopped status queries, guest-ready evidence, and process cleanup.
+- [ ] Validate the candidate using one temporary instance before provisioning the two-worker fleet. No long-lived workers until `/dev/kvm` is usable and the exact guest completes a boot/stop cycle.
+- Status: **blocked / not runtime-verified**. Region/type and software candidates are selected, but no AWS instance has been launched and no host or guest evidence exists.
+- Acceptance: the candidate instance exposes usable KVM and the pinned guest boots, reports running, stops, and reports stopped/exited; otherwise record a fallback decision and test that path.
 - Depends on: T-00.
 
 ### T-02 — Lock MVP decisions
-- [x] Confirm language/toolchain and minimal UI approach from repository state: Go 1.23+; UI will be served by the controller using server-rendered HTML or a small embedded frontend (documented in `docs/design.md`).
-- [ ] Pin Cloud Hypervisor and guest image versions. This is blocked on T-01 selecting and testing the worker environment; no release/image has been verified.
-- [x] Document provisional vCPU/memory limits, safety reserve, allowed image IDs, and prototype auth approach: `config.example.json` sets max 8 vCPUs, max 8192 MiB, 1024 MiB reserve, image ID `ubuntu-demo`; worker and operator bearer-token secrets are environment-configured. These are prototype defaults, not host-validated final limits.
-- Acceptance: configuration defaults and decisions are documented; no critical unknown blocks implementation.
-- Status: **incomplete** because T-01 feasibility and pinned Cloud Hypervisor/guest-image versions remain unresolved. Do not advance to dependent implementation tasks until resolved or explicitly re-scoped with the user.
+- [x] Confirm language/toolchain and minimal UI approach: Go 1.23+; controller-served server-rendered HTML or small embedded frontend (documented in `docs/design.md`).
+- [x] Select Cloud Hypervisor release candidate **v54.0** and guest image candidate **Ubuntu Server 24.04 LTS x86-64 cloud image build dated 2026-10-17**. The pinned artifact URLs and checksum verification process are documented in [AWS worker feasibility gate](./deployment/aws-worker-validation.md); checksums and boot compatibility still require verification.
+- [x] Document provisional vCPU/memory limits, safety reserve, image alias, and prototype auth approach: `config.example.json` sets max 8 vCPUs, max 8192 MiB, 1024 MiB reserve, and human-readable image alias `ubuntu-demo`; worker and operator bearer-token secrets are environment-configured. These defaults are provisional pending host evidence; final allowlist identity must be immutable (SHA-256).
+- [ ] Complete T-02 evidence closure: record verified Cloud Hypervisor v54.0 binary SHA-256, guest disk SHA-256 from the signed official checksum list, confirm actual worker kernel/available resources, and update the allowlist so `ubuntu-demo` resolves to the immutable image digest. Revisit resource limits after the smoke test.
+- Acceptance: all MVP choices that affect API/image identity and host feasibility are pinned, documented, and validated on the candidate environment; no critical implementation blocker remains.
+- Status: **incomplete**. Candidate decisions are selected, but T-01 runtime feasibility and artifact checksum/boot evidence remain unresolved. Do not advance T-07.
 - Depends on: T-00, T-01.
 
 ## Phase 1 — Foundation

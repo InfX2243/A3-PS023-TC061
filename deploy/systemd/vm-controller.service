@@ -1,0 +1,30 @@
+[Unit]
+Description=AIORI VM Controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vm-controller
+Group=vm-controller
+EnvironmentFile=-/etc/vm-controller/controller.env
+WorkingDirectory=/var/lib/vm-controller
+ExecStart=/usr/local/bin/vm-controller -config /etc/vm-controller/controller.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/vm-controller
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

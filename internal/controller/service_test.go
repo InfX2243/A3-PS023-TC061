@@ -50,7 +50,8 @@ func fakeWorker(t *testing.T, delay time.Duration) (*httptest.Server, *atomic.In
 			return
 		}
 		state := "Running"
-		if r.URL.Path[len(r.URL.Path)-5:] == "/stop" { state = "Shutdown" }
+		if r.Method == http.MethodGet { state = "Created" }
+		if strings.HasSuffix(r.URL.Path, "/stop") { state = "Shutdown" }
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"worker_id":"worker-a","vm_id":"vm-test","operation_id":"op-test","state":state})
 	}))
@@ -114,4 +115,32 @@ func TestHeartbeatRejectsUnknownWorkerAndExcessiveMemory(t *testing.T) {
 func TestWorkerUnavailableErrorIsClassifiedAsUncertain(t *testing.T) {
 	if !isUnknownWorkerOutcome(&workerCallError{Unknown:true, cause:errors.New("timeout")}) { t.Fatal("timeout should be uncertain") }
 	if isUnknownWorkerOutcome(&workerCallError{Status:http.StatusBadRequest}) { t.Fatal("worker 400 should be a definitive rejection") }
+}
+
+func TestIdempotencyKeyCannotBeReusedForDifferentRequest(t *testing.T) {
+	server, creates := fakeWorker(t, 0)
+	defer server.Close()
+	svc, _ := testService(t, server.URL)
+	first := controllerapi.CreateVMRequest{Name:"demo", VCPUs:1, MemoryMiB:512, ImageID:"ubuntu-demo"}
+	if _, _, err := svc.CreateVM(context.Background(), first, "same-key"); err != nil { t.Fatal(err) }
+	first.MemoryMiB = 1024
+	if _, _, err := svc.CreateVM(context.Background(), first, "same-key"); !errors.Is(err, controllerapi.ErrConflict) { t.Fatalf("different request with same idempotency key error = %v, want conflict", err) }
+	if creates.Load() != 1 { t.Fatalf("worker create calls = %d, want 1", creates.Load()) }
+}
+
+func TestReconcileResolvesUnknownCreateFromWorkerStatus(t *testing.T) {
+	server, _ := fakeWorker(t, 100*time.Millisecond)
+	defer server.Close()
+	svc, _ := testService(t, server.URL)
+	svc.workers = newWorkerClient("worker-secret", 10*time.Millisecond)
+	vm, op, err := svc.CreateVM(context.Background(), controllerapi.CreateVMRequest{Name:"demo", VCPUs:1, MemoryMiB:512, ImageID:"ubuntu-demo"}, "reconcile-key")
+	if err != nil { t.Fatal(err) }
+	if op.State != domain.OperationUnknown { t.Fatalf("initial operation state = %q, want unknown", op.State) }
+	svc.workers = newWorkerClient("worker-secret", time.Second)
+	if err := svc.Reconcile(context.Background()); err != nil { t.Fatalf("Reconcile: %v", err) }
+	vm, err = svc.GetVM(context.Background(), vm.ID)
+	if err != nil { t.Fatal(err) }
+	op, err = svc.GetOperation(context.Background(), op.ID)
+	if err != nil { t.Fatal(err) }
+	if vm.Observed != domain.VMStopped || op.State != domain.OperationSucceeded { t.Fatalf("reconciled state not confirmed: vm=%#v op=%#v", vm, op) }
 }

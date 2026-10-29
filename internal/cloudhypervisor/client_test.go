@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,7 +15,12 @@ import (
 
 func fakeSocket(t *testing.T, handler http.Handler) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "ch.sock")
+	dir, err := os.MkdirTemp("/tmp", "ch-")
+	if err != nil {
+		t.Fatalf("create short temporary directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := filepath.Join(dir, "s.sock")
 	listener, err := net.Listen("unix", path)
 	if err != nil {
 		t.Fatalf("listen on unix socket: %v", err)

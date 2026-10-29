@@ -212,7 +212,9 @@ Preferred prototype topology, conditional on KVM feasibility:
 - IAM instance roles with least privilege; no long-lived AWS access keys on hosts.
 - Resource tags and a documented teardown procedure.
 
-**Feasibility gate:** Before provisioning both workers, validate that the chosen AWS instance type and configuration exposes working `/dev/kvm`, Cloud Hypervisor starts, and the chosen guest boots. If not, use a supported bare-metal configuration or run workers on existing KVM hosts while the controller remains in AWS. Do not assume nested KVM works on arbitrary EC2 instances.
+**Selected first candidate (not yet tested):** one temporary `c8i.xlarge` in `ap-south-1` (Mumbai), Ubuntu Server 24.04.5 LTS x86-64 host, Cloud Hypervisor v54.0, and the Ubuntu Server 24.04 LTS x86-64 cloud image build dated 2026-10-17. AWS documents nested virtualization for supported EC2 families, including C8i, and lists C8i in Mumbai; this establishes a plausible candidate, not runtime proof. The full preflight, signed checksum verification, boot/stop acceptance, and teardown steps are in [AWS worker feasibility gate](./deployment/aws-worker-validation.md).
+
+**Feasibility gate:** Before provisioning both workers, prove that the candidate exposes working `/dev/kvm`, Cloud Hypervisor starts, and the exact guest boots and stops. If not, use a supported bare-metal configuration or another verified nested-virtualization-capable type. Do not assume nested KVM works on arbitrary EC2 instances.
 
 ## 10. Deployment and rollback
 

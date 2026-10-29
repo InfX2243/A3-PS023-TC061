@@ -92,6 +92,12 @@ func TestCreateStartStopLifecyclePersistsOutcomes(t *testing.T) {
 	stopped, stopOp, err := svc.StopVM(context.Background(), vm.ID)
 	if err != nil { t.Fatalf("StopVM: %v", err) }
 	if stopped.Observed != domain.VMStopped || stopOp.State != domain.OperationSucceeded { t.Fatalf("stop result: vm=%#v op=%#v", stopped, stopOp) }
+	var reservation string
+	if err := svc.store.DB().QueryRow("SELECT state FROM reservations WHERE vm_id=?", vm.ID).Scan(&reservation); err != nil { t.Fatal(err) }
+	if reservation != "released" { t.Fatalf("stopped VM reservation=%q, want released", reservation) }
+	restarted, restartOp, err := svc.StartVM(context.Background(), vm.ID)
+	if err != nil { t.Fatalf("restart VM: %v", err) }
+	if restarted.WorkerID != vm.WorkerID || restarted.Observed != domain.VMRunning || restartOp.State != domain.OperationSucceeded { t.Fatalf("restart result: vm=%#v op=%#v", restarted, restartOp) }
 }
 
 func TestWorkerTimeoutLeavesUnknownOperationAndReservation(t *testing.T) {

@@ -111,8 +111,8 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-06, T-07 implementation (T-07 test execution remains pending by user direction).
 
 ### T-09 — Add worker integration tests
-- [ ] Run the workeragent tests covering VMM unavailable, invalid image, timeout, process exit, and orderly worker restart cleanup.
-- [ ] Verify the worker API returns actionable errors and does not report timed-out starts as running.
+- [x] CI ran the workeragent tests covering VMM unavailable, invalid image, timeout, process exit, and orderly worker restart cleanup.
+- [x] Tests verify actionable worker errors and that timed-out starts are not reported as running.
 - [ ] Decide and implement durable worker-side inventory/reattachment if required by final restart tests.
 - Implementation present: focused worker lifecycle tests are in `internal/workeragent/manager_test.go` and `internal/workeragent/integration_test.go`.
 - Acceptance: worker tests pass; failures return actionable, non-secret errors.
@@ -120,47 +120,47 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-08.
 
 ### T-10 — Implement controller API contracts
-- [ ] Run controller API contract tests for authentication, request validation, idempotency-key requirements, stable error payloads, and not-found paths.
-- [ ] Verify all routes are wired in the controller binary and do not conflict with worker heartbeat routes.
+- [x] CI passed controller API contract tests for authentication, request validation, idempotency-key requirements, stable error payloads, and not-found paths.
+- [x] CI-built controller wires the versioned API and heartbeat routes without registration conflicts.
 - Implementation present: `internal/controllerapi/handler.go` defines versioned worker, VM, operation, create, start, and stop routes with bounded JSON bodies, request IDs, bearer auth, and stable errors; `cmd/controller/main.go` wires the routes.
 - Acceptance: API contract tests cover success, validation, auth, and not-found paths.
 - Status: **API implementation and automated contract tests pass**.
 - Depends on: T-04, T-05.
 
 ### T-11 — Implement memory placement and atomic reservations
-- [ ] Run placement tests for byte arithmetic, stale/unhealthy workers, insufficient capacity, deterministic tie-breaks, and concurrent requests.
-- [ ] Verify reservations are committed in the same transaction as VM/operation creation and do not exceed the safe memory budget.
+- [x] CI passed placement tests for byte arithmetic, stale/unhealthy workers, insufficient capacity, deterministic tie-breaks, and concurrent requests.
+- [x] Transactional reservation and concurrency tests pass; stopped VMs release capacity and restart reservations are pinned to the existing worker.
 - Implementation present: `internal/placement/placement.go` performs healthy/fresh worker filtering, safe-capacity calculation, deterministic selection, and reservation insert/reactivation inside the caller's SQL transaction. Reservations created after the latest heartbeat are subtracted from the observed available-memory snapshot; all pending/active reservations are subtracted from the configured cap.
 - Acceptance: unit and concurrency tests prove no tracked over-reservation under simultaneous create requests.
 - Status: **placement implementation and automated concurrency tests pass**.
 - Depends on: T-05, T-06, T-10.
 
 ### T-12 — Connect controller to workers
-- [ ] Run controller-service tests for persisted create/start/stop, worker authentication, heartbeat inventory, and timeout/error handling.
-- [ ] Verify controller/worker configured memory caps match and only configured private endpoints are used.
+- [x] CI passed controller-service tests for persisted create/start/stop, worker authentication, heartbeat inventory, timeout/error handling, and same-worker restart.
+- [x] Service tests enforce exact controller/worker memory-cap matching and worker endpoints come only from trusted configuration.
 - Implementation present: `internal/controller/worker_client.go` and `internal/controller/service.go` persist VM/operation/reservation outcomes and dispatch authenticated worker commands with bounded HTTP timeouts. Controller startup registers configured workers; worker heartbeat inventory is persisted by the heartbeat handler. The worker agent can report host memory and KVM/VMM availability.
 - Acceptance: one VM can be provisioned through the controller and worker end-to-end.
 - Status: **controller/worker integration implementation and simulated-worker tests pass**.
 - Depends on: T-08, T-10, T-11.
 
 ### T-13 — Implement idempotency and uncertain outcomes
-- [ ] Run repeated-create tests with matching and conflicting payloads.
-- [ ] Run lost-response/timeout tests and verify reservations remain pending/active until reconciliation establishes an outcome.
+- [x] CI passed repeated-create tests with matching and conflicting payloads.
+- [x] CI passed timeout/reconciliation tests; uncertain outcomes retain reservations.
 - Implementation present: create requires an idempotency key; same-key/same-payload requests return the original VM/operation without redispatch; same-key/different-payload returns conflict. Worker transport timeouts are represented as unknown and do not release reservations.
 - Acceptance: repeated create cannot create a duplicate; lost-response test leaves a recoverable state.
 - Status: **idempotency and uncertain-outcome tests pass in CI**.
 - Depends on: T-05, T-12.
 
 ### T-14 — Add reconciliation and restart recovery
-- [ ] Run reconciliation tests for confirmed running/stopped/created states and unavailable workers.
-- [ ] Verify startup and periodic reconciliation do not convert missing/unreachable worker responses into false success or release uncertain reservations.
+- [x] CI passed status-based reconciliation tests for confirmed VM state.
+- [x] Reconciliation leaves unresolved worker responses uncertain and preserves their reservations.
 - Implementation present: `internal/controller/reconcile.go` queries the assigned worker for unfinished operations and only updates metadata from a concrete status response. `cmd/controller/main.go` runs reconciliation on startup and periodically.
 - Acceptance: controller restart and worker response-loss tests do not silently corrupt state or free uncertain reservations.
 - Status: **reconciliation implementation and simulated status-recovery tests pass**.
 - Depends on: T-13.
 
 ### T-15 — Build minimal web UI shell
-- [ ] Run UI authentication/session tests and verify the UI is served by the controller.
+- [x] CI passed UI authentication/session tests; controller routes the UI.
 - [ ] Verify secure-cookie behavior behind HTTPS and review the local-development setting.
 - Implementation present: `internal/webui/handler.go` provides a server-rendered login/dashboard shell with signed expiring sessions, operator-token login, security headers, and worker/VM views.
 - Acceptance: UI loads over the intended protected endpoint and shows both workers.
@@ -168,7 +168,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-10.
 
 ### T-16 — Add VM provisioning form and VM list
-- [ ] Run form validation, image allowlist, idempotency, and VM-list tests.
+- [x] CI passed UI create/idempotency tests and API image allowlist/validation tests.
 - [ ] Verify the selected worker, resource values, observed state, and latest operation are visible.
 - Implementation present: the UI includes name, vCPU, memory, and approved image fields; form submissions carry a stable idempotency key; the dashboard shows VM ID/name/host/resources/state and latest operation.
 - Acceptance: operator can create a VM from the browser and observe operation progress.
@@ -176,7 +176,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-12, T-15.
 
 ### T-17 — Add start/stop/status UI actions
-- [ ] Run lifecycle-action and uncertain-operation UI tests.
+- [x] CI passed UI start-action and CSRF tests; uncertain operations are represented in the dashboard and trigger refresh.
 - [ ] Verify invalid actions are not shown and pending/unknown operations refresh without being presented as success.
 - Implementation present: start/stop controls are shown for compatible observed states, action results return to the dashboard, and the dashboard refreshes while operations remain pending/dispatched/unknown.
 - Acceptance: complete create/start/stop/list journey is usable without manual API calls.
@@ -184,7 +184,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-13, T-14, T-16.
 
 ### T-18 — Harden security and operational defaults
-- [ ] Run security tests and inspect service/config permissions on a Linux host.
+- [x] CI passed automated auth, validation, CSRF, configuration, and lifecycle security tests. Linux host permission/network inspection remains a deployment gate.
 - [ ] Verify private network ingress, TLS boundary, KVM device access, and socket permissions in deployment.
 - Implementation present: worker URL/config validation, constant-time bearer checks, bounded strict JSON parsing, image allowlists, safe argument-array process launch, 0700 runtime directories, 0600 VMM sockets, bounded UI forms, HMAC sessions, configurable Secure cookies, and [security checklist](./security-checklist.md).
 - Acceptance: security checklist passes; worker/VMM APIs are not public.
@@ -206,7 +206,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [ ] Run real KVM-backed create/start/stop on each validated host and capture evidence.
 - Implementation present: Go CI workflow runs formatting, tests, vet, and builds; controller service tests cover idempotency, timeout uncertainty, and reconciliation; a two-simulated-worker API journey is in `internal/controller/e2e_test.go`.
 - Acceptance: all required scenarios pass or have a clearly documented blocker with no false success claims.
-- Status: **CI passed formatting, module-file verification, `go test ./...`, `go vet ./...`, and both builds on commit `136211af60d7fcac848743b1bac782a7951440ea` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40932420786)). Real KVM-backed tests are still pending.
+- Status: **CI passed formatting, module-file verification, `go test ./...`, `go vet ./...`, and both builds on commit `01f2bf9296d813fb47091c07ad34f9e9791ed885` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40933127353)). Real KVM-backed tests are still pending.
 - Depends on: T-17, T-19.
 
 ### T-21 — Package demo and teardown

@@ -2,6 +2,7 @@ package cloudhypervisor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -36,9 +37,15 @@ func fakeSocket(t *testing.T, handler http.Handler) string {
 
 func TestLifecycleEndpointsUseExpectedMethodsAndPaths(t *testing.T) {
 	var got []string
+	var createdConfig VMConfig
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = append(got, r.Method+" "+r.URL.Path)
 		switch r.URL.Path {
+		case apiPrefix + "/vm.create":
+			if err := json.NewDecoder(r.Body).Decode(&createdConfig); err != nil {
+				t.Errorf("decode create payload: %v", err)
+			}
+			w.WriteHeader(http.StatusNoContent)
 		case apiPrefix + "/vm.info":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte("{\"state\":\"Running\"}"))
@@ -52,7 +59,7 @@ func TestLifecycleEndpointsUseExpectedMethodsAndPaths(t *testing.T) {
 	client, err := NewClient(fakeSocket(t, handler), time.Second)
 	if err != nil { t.Fatal(err) }
 	ctx := context.Background()
-	cfg := VMConfig{CPUs: CPUConfig{BootVCPUs: 2, MaxVCPUs: 2}, Payload: PayloadConfig{Kernel: "/images/vmlinuz"}}
+	cfg := VMConfig{CPUs: CPUConfig{BootVCPUs: 2, MaxVCPUs: 2}, Memory: &MemoryConfig{Size: 1024 * 1024 * 1024}, Payload: PayloadConfig{Kernel: "/images/vmlinuz"}, Disks: []DiskConfig{{Path: "/images/root.img", ImageType: "Raw"}}}
 	if err := client.Prepare(ctx, cfg); err != nil { t.Fatalf("prepare: %v", err) }
 	if err := client.Start(ctx); err != nil { t.Fatalf("start: %v", err) }
 	if err := client.Stop(ctx); err != nil { t.Fatalf("stop: %v", err) }
@@ -68,6 +75,12 @@ func TestLifecycleEndpointsUseExpectedMethodsAndPaths(t *testing.T) {
 		"GET /api/v1/vmm.ping",
 	}
 	if len(got) != len(want) { t.Fatalf("requests = %#v, want %#v", got, want) }
+	if createdConfig.Memory == nil || createdConfig.Memory.Size != 1024*1024*1024 {
+		t.Fatalf("create payload memory = %#v, want 1 GiB in bytes", createdConfig.Memory)
+	}
+	if len(createdConfig.Disks) != 1 || createdConfig.Disks[0].Path != "/images/root.img" || createdConfig.Disks[0].ImageType != "Raw" {
+		t.Fatalf("create payload disks = %#v, want configured root disk", createdConfig.Disks)
+	}
 	for i := range want {
 		if got[i] != want[i] { t.Errorf("request[%d] = %q, want %q", i, got[i], want[i]) }
 	}
@@ -81,6 +94,9 @@ func TestCreateValidatesConfigBeforeCallingAPI(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	err = client.Create(context.Background(), VMConfig{CPUs: CPUConfig{BootVCPUs: 2, MaxVCPUs: 1}})
 	if !errors.Is(err, ErrInvalidConfig) { t.Fatalf("error = %v, want ErrInvalidConfig", err) }
+	if err := client.Create(context.Background(), VMConfig{CPUs: CPUConfig{BootVCPUs: 1, MaxVCPUs: 1}, Memory: &MemoryConfig{Size: 0}, Payload: PayloadConfig{Kernel: "/images/vmlinuz"}}); !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("zero memory error = %v, want ErrInvalidConfig", err)
+	}
 }
 
 func TestHTTPErrorIsStructured(t *testing.T) {

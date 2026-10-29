@@ -3,7 +3,9 @@ package workerhealth
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -70,6 +72,11 @@ func (h *Handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 	var hb Heartbeat
 	if err := dec.Decode(&hb); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid heartbeat payload"})
+		return
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "heartbeat must contain exactly one JSON value"})
 		return
 	}
 	report, err := h.registry.Heartbeat(hb)

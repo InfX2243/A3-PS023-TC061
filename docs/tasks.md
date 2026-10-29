@@ -1,7 +1,7 @@
 # Task Plan — One Verifiable Task at a Time
 
 ## How to use this file
-Work strictly from top to bottom unless a dependency requires a documented change. Select exactly one unchecked task, implement it, run its acceptance checks, and update this file with evidence before starting the next task.
+Implement tasks in dependency order and keep scope/task status explicit. The user has requested an implementation-first pass: continue implementing the remaining software tasks without waiting for local test execution or AWS deployment. Add tests with the code and record all checks that could not be run as pending; do not mark acceptance complete until verification evidence is available. Deployment-only gates must not block implementation of dependent software contracts.
 
 - [ ] means not yet verified.
 - [x] means completed and supported by a commit, test output, or deployment evidence.
@@ -13,7 +13,7 @@ Work strictly from top to bottom unless a dependency requires a documented chang
 
 The user selected AWS EC2 and explicitly accepted AWS's official nested-virtualization documentation as the platform-support evidence: the linked AWS page lists C8i as supported, KVM as a supported L1 hypervisor, and `NestedVirtualization=enabled` as the launch option. This resolves the **architecture/platform support question**, not the instance-specific guest boot test. The working candidate remains one temporary `c8i.xlarge` in `ap-south-1`, Ubuntu Server 24.04.5 LTS x86-64 host, Cloud Hypervisor v54.0, and the versioned Ubuntu 24.04 LTS cloud image build dated 2026-10-17. The candidate choices and runtime evidence procedure are in [AWS worker feasibility gate](./deployment/aws-worker-validation.md). Per the user's decision, T-07 adapter-contract implementation may proceed against the pinned v54.0 OpenAPI contract; actual KVM/guest boot-stop, artifact checksum capture, and immutable image allowlisting remain mandatory deployment gates before two-worker rollout. No AWS instance has been launched and no guest has booted.
 
-## Phase 0 — Feasibility and repository baseline
+## Implementation-first execution policy (2026-10-29)\n\nPer explicit user direction, complete the software implementation across the task plan before pausing for AWS deployment or a full local verification session. Continue through code tasks in dependency order even if a test command or real-host check cannot currently run. Add focused tests alongside features, keep unexecuted checks unchecked, and do not claim they pass. T-01/T-02 runtime evidence remains required for deployment acceptance, not a prerequisite to write the remaining worker/controller/UI code. Once implementation is complete, run the full test and integration pass, fix failures, and then perform real-host/deployment validation.\n\n## Phase 0 — Feasibility and repository baseline
 
 ### T-00 — Inspect repository and record baseline
 - [x] Inspect current files, language, build/test commands, and existing implementation.
@@ -97,12 +97,18 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-01 platform support decision, T-02 selected API/image candidates, T-03.
 
 ### T-08 — Implement worker VM lifecycle and process ownership
-- [ ] Accept authenticated, validated commands with operation and VM IDs.
-- [ ] Enforce server-side image allowlist and fixed storage locations.
-- [ ] Ensure child processes are supervised and reaped.
-- [ ] Make duplicate commands safe by checking existing VM/operation state.
-- Acceptance: create/start/stop/status work on one host; repeated commands do not spawn duplicate VM processes.
-- Depends on: T-06, T-07.
+- [x] Add worker manager with VM/operation identifiers, resource bounds, and configured image-ID resolution.
+- [x] Enforce server-side image allowlist and fixed per-VM runtime/socket paths; API requests cannot supply host filesystem paths or VMM arguments.
+- [x] Add authenticated worker endpoints for prepare/create, start, stop, and status with bounded JSON payloads and stable error categories.
+- [x] Add Cloud Hypervisor process launch/readiness handling, graceful stop confirmation, and child-process kill/reap cleanup.
+- [x] Make repeated create/start/stop requests state-aware and avoid launching a second VMM for an existing VM.
+- [x] Add a runnable `cmd/worker-agent` entry point and credential-free `worker.example.json` template.
+- [ ] Run `gofmt` and `go test ./...`; address compile/test failures.
+- [ ] Add persistent worker-side recovery and restart behavior where required by T-09/T-14 integration.
+- Acceptance: create/start/stop/status work on one host; repeated commands do not spawn duplicate VM processes; invalid image/path inputs are rejected; child processes are reaped.
+- Evidence: worker implementation and focused tests added in commits `aeb9da1`, `4154a3c`, `bf915aa`, `44e54eb`, `2c78fa4`, `f24edab`, and `3a8b012`; README usage updated in `a5e5d14`. Tests have not been run in this environment.
+- Status: **implementation added; verification pending**. The process runner is designed for Linux workers and has not yet been tested against a real Cloud Hypervisor binary.
+- Depends on: T-06, T-07 implementation (T-07 test execution remains pending by user direction).
 
 ### T-09 — Add worker integration tests
 - [ ] Test unavailable VMM, invalid image, timeout, process exit, and worker restart cases.

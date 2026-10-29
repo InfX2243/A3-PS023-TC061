@@ -1,12 +1,12 @@
 package webui
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -46,7 +46,7 @@ type dashboardData struct { Workers []domain.Worker; VMs []vmRow; Error string; 
 type formData struct { Limits Limits; Error string; IdempotencyKey string }
 
 func NewHandler(service Service, operatorToken string, limits Limits, secureCookie bool) *Handler {
-	return &Handler{service: service, token: operatorToken, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Parse(pageTemplates))}
+	return &Handler{service: service, token: operatorToken, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Funcs(template.FuncMap{"divMiB": func(v uint64) uint64 { return v / (1024 * 1024) }}).Parse(pageTemplates))}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -132,7 +132,7 @@ func (h *Handler) createVM(w http.ResponseWriter, r *http.Request) {
 		h.renderStatus(w, http.StatusServiceUnavailable, "new-vm", formData{Limits:h.limits, Error:err.Error(), IdempotencyKey:key})
 		return
 	}
-	http.Redirect(w, r, "/?notice="+template.URLQueryEscaper("VM request recorded; operation "+op.State.String()), http.StatusSeeOther)
+	http.Redirect(w, r, "/?notice="+template.URLQueryEscaper("VM request recorded; operation "+string(op.State)), http.StatusSeeOther)
 }
 
 func (h *Handler) startVM(w http.ResponseWriter, r *http.Request) {
@@ -210,7 +210,6 @@ func safeFormID(value string) bool {
 	return true
 }
 
-var _ = errors.New
 
 const pageTemplates = `
 {{define "login"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>VM Controller — Sign in</title></head><body><main><h1>VM Controller</h1><h2>Sign in</h2>{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}<form method="post" action="/login"><label>Operator token <input type="password" name="token" autocomplete="current-password" required></label><button type="submit">Sign in</button></form></main></body></html>{{end}}

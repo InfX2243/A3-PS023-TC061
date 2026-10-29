@@ -27,6 +27,7 @@ type Report struct {
 	ConfiguredMemoryCapBytes uint64    `json:"configured_memory_cap_bytes"`
 	CloudHypervisorHealthy   bool      `json:"cloud_hypervisor_healthy"`
 	Status                   Status    `json:"status"`
+	probeUnreachable         bool      `json:"-"`
 }
 
 type Heartbeat struct {
@@ -86,6 +87,8 @@ func (r *Registry) List() []Report {
 	for _, report := range r.workers {
 		age := now.Sub(report.LastHeartbeat)
 		switch {
+		case report.probeUnreachable:
+			report.Status = StatusUnreachable
 		case age < 0:
 			report.Status = StatusUnreachable
 		case age > r.staleAfter:
@@ -112,6 +115,7 @@ func (r *Registry) MarkUnreachable(id string) bool {
 		return false
 	}
 	report.Status = StatusUnreachable
+	report.probeUnreachable = true
 	r.workers[id] = report
 	return true
 }

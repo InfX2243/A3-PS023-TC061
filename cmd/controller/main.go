@@ -62,7 +62,7 @@ func main() {
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: allowedImages,
 	}).Register(mux)
-	webui.NewHandler(service, cfg.OperatorToken, webui.Limits{
+	webui.NewHandlerWithCredentials(service, cfg.OperatorToken, cfg.OperatorUsername, cfg.OperatorPassword, webui.Limits{
 		MaxVCPUs: cfg.MaxVCPUs,
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: cfg.AllowedImages,

@@ -22,6 +22,11 @@ func main() {
 	configPath := flag.String("config", "config.json", "path to controller JSON configuration (optional)")
 	flag.Parse()
 
+	if err := config.LoadDotEnv(".env"); err != nil {
+		slog.Error("load environment file", "error", err)
+		os.Exit(2)
+	}
+
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		slog.Error("configuration invalid", "error", err)

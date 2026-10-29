@@ -16,7 +16,7 @@ chmod 600 .env
 openssl rand -hex 32
 ```
 
-Do not source an untrusted env file. For a server, install the values in /etc/aiori/controller.env, owned by root and mode 0600 (the service manager reads it before dropping privileges). Generate distinct random values for VM_CONTROLLER_OPERATOR_TOKEN and VM_CONTROLLER_WORKER_SHARED_SECRET. Rotate both if they are exposed.
+Do not source an untrusted env file. For a server, install the values in /etc/aiori/controller.env, owned by root and mode 0600 (the service manager reads it before dropping privileges). Generate distinct random values for VM_CONTROLLER_OPERATOR_TOKEN and VM_CONTROLLER_WORKER_SHARED_SECRET, and set VM_CONTROLLER_OPERATOR_USERNAME plus a different VM_CONTROLLER_OPERATOR_PASSWORD of at least 16 characters. The username/password pair protects browser sign-in; the operator token continues to authenticate the API and sign session/CSRF tokens. Rotate exposed credentials.
 
 ## 2. Prepare controller configuration
 

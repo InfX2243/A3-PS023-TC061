@@ -122,7 +122,7 @@ func TestStatusRejectsMalformedOrUnknownState(t *testing.T) {
 
 func TestStatusAcceptsDocumentedBreakPointState(t *testing.T) {
 	client, err := NewClientWithHTTPClient(&http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"state":"BreakPoint"}`)}, nil
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"state":"BreakPoint"}`))}, nil
 	})})
 	if err != nil {
 		t.Fatal(err)

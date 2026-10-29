@@ -15,6 +15,7 @@ Planning branch: `docs/mvp-requirements-design-task-plan`
 7. [Cloud Hypervisor v54.0 API contract](./cloudhypervisor-api-v54.md) — pinned endpoint and schema contract used by the Go adapter.
 8. [Security checklist](./security-checklist.md) — code controls and deployment-only checks.
 9. [Worker deployment runbook](./deployment/worker-deployment.md) — systemd setup, worker registration, acceptance sequence, and teardown.
+10. [Demo runbook](./demo-runbook.md) — repeatable UI/API demo, fault evidence, and cautious teardown.
 
 ## MVP north star
 

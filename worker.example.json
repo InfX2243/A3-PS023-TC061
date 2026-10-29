@@ -7,6 +7,8 @@
   "max_memory_bytes": 7516192768,
   "request_timeout_ms": 2000,
   "startup_timeout_ms": 5000,
+  "controller_heartbeat_url": "",
+  "heartbeat_interval_seconds": 10,
   "images": [
     {
       "id": "ubuntu-demo",

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -15,11 +17,11 @@ func TestMigrationAndRestartPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if _, err := s.DB().ExecContext(ctx, `INSERT INTO workers
 		(id,name,endpoint,state,last_heartbeat,available_memory_bytes,memory_limit_bytes,created_at,updated_at)
 		VALUES(?,?,?,?,?,?,?,?,?)`,
-		"worker-a", "worker-a", "http://127.0.0.1:9000", "healthy", time.Now().UTC().Format(time.RFC3339Nano), 4096, 8192,
-		time.Now().UTC().Format(time.RFC3339Nano), time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		"worker-a", "worker-a", "http://127.0.0.1:9000", "healthy", now, 4096, 8192, now, now); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -85,13 +87,27 @@ func TestTransactionRollsBackOnError(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	sentinel := context.DeadlineExceeded
-	err = s.WithTx(context.Background(), func(tx interfaceTx) error { return nil })
-	_ = sentinel
-	_ = err
+	sentinel := errors.New("force rollback")
+	err = s.WithTx(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(context.Background(), `INSERT INTO workers
+			(id,name,endpoint,state,available_memory_bytes,memory_limit_bytes,created_at,updated_at)
+			VALUES(?,?,?,?,?,?,?,?)`, "w1", "w1", "http://localhost:1", "healthy", 1024, 2048, "now", "now")
+		if err != nil {
+			return err
+		}
+		return sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("transaction error = %v, want sentinel", err)
+	}
+	var count int
+	if err := s.DB().QueryRow("SELECT COUNT(*) FROM workers").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("workers after rollback = %d, want 0", count)
+	}
 }
-
-type interfaceTx = *sql.Tx
 
 func TestConcurrentTransactionsSerialize(t *testing.T) {
 	s, err := Open(context.Background(), ":memory:")

@@ -378,3 +378,25 @@ func TestRegisterWorkerRejectsMissingCSRF(t *testing.T) {
 	if response.Code != http.StatusForbidden { t.Fatalf("missing CSRF response = %d, want 403", response.Code) }
 	if h.service.(*fakeUIService).registeredID != "" { t.Fatal("worker registration happened without CSRF token") }
 }
+
+func TestUsernamePasswordLogin(t *testing.T) {
+	mux := http.NewServeMux()
+	h := NewHandlerWithCredentials(&fakeUIService{}, "session-signing-secret", "operator", "correct-horse-battery-staple-2026", Limits{MaxVCPUs:8, MaxMemoryMiB:8192, AllowedImages:[]string{"ubuntu-demo"}}, true)
+	h.Register(mux)
+	wrong := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(url.Values{"username":{"operator"}, "password":{"wrong-password"}}.Encode()))
+	wrong.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	wrongResponse := httptest.NewRecorder()
+	mux.ServeHTTP(wrongResponse, wrong)
+	if wrongResponse.Code != http.StatusUnauthorized { t.Fatalf("wrong password status = %d, want 401", wrongResponse.Code) }
+	if len(wrongResponse.Result().Cookies()) != 0 { t.Fatal("wrong password issued a session cookie") }
+
+	good := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(url.Values{"username":{"operator"}, "password":{"correct-horse-battery-staple-2026"}}.Encode()))
+	good.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	goodResponse := httptest.NewRecorder()
+	mux.ServeHTTP(goodResponse, good)
+	if goodResponse.Code != http.StatusSeeOther || goodResponse.Header().Get("Location") != "/console" { t.Fatalf("valid credentials response = %d, location %q", goodResponse.Code, goodResponse.Header().Get("Location")) }
+	cookies := goodResponse.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].HttpOnly || !cookies[0].Secure || cookies[0].SameSite != http.SameSiteStrictMode {
+		t.Fatalf("session cookie attributes not secure: %#v", cookies)
+	}
+}

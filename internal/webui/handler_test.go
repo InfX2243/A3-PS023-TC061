@@ -138,7 +138,7 @@ func TestLifecycleActionsRequireCSRF(t *testing.T) {
 
 func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
 	service := &fakeUIService{
-		vms: []domain.VM{{ID:"vm-1", Name:"demo", Observed:domain.VMUnknown, MemoryBytes:512*1024*1024}},
+		vms: []domain.VM{{ID:"vm-1", Name:"demo", WorkerID:"worker-a", VCPUs:1, MemoryBytes:512*1024*1024, ImageID:"ubuntu-demo", Observed:domain.VMUnknown}},
 		latest: domain.Operation{ID:"op-1", Type:domain.OperationStart, State:domain.OperationUnknown},
 	}
 	mux := http.NewServeMux()
@@ -154,5 +154,6 @@ func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusOK { t.Fatalf("dashboard status=%d", response.Code) }
 	if !strings.Contains(response.Body.String(), "http-equiv=\"refresh\" content=\"5\"") { t.Fatal("dashboard did not refresh for unknown operation") }
+	for _, expected := range []string{"demo", "worker-a", "ubuntu-demo", "start: unknown"} { if !strings.Contains(response.Body.String(), expected) { t.Fatalf("dashboard omitted %q", expected) } }
 	if strings.Contains(response.Body.String(), ">Start</button>") || strings.Contains(response.Body.String(), ">Stop</button>") { t.Fatal("dashboard offered lifecycle action for unknown state") }
 }

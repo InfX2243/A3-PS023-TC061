@@ -14,6 +14,10 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/cloudhypervisor"
 )
 
+
+type customRuntime struct { hv Hypervisor; proc Process }
+func (r customRuntime) Launch(context.Context, string, string, time.Duration, time.Duration) (Hypervisor, Process, error) { return r.hv, r.proc, nil }
+
 type failedRuntime struct{ err error }
 func (r failedRuntime) Launch(context.Context, string, string, time.Duration, time.Duration) (Hypervisor, Process, error) {
 	return nil, nil, r.err
@@ -47,7 +51,7 @@ func TestPrepareReturnsActionableErrorWhenVMMUnavailable(t *testing.T) {
 
 func TestStartTimeoutIsReturnedWithoutClaimingRunning(t *testing.T) {
 	hv := &blockingHypervisor{}
-	runtime := &fakeRuntime{hv: hv, proc: &fakeProcess{}}
+	runtime := customRuntime{hv: hv, proc: &fakeProcess{}}
 	cfg := Config{
 		WorkerID: "worker-a", RuntimeDir: filepath.Join(t.TempDir(), "runtime"),
 		CloudHypervisor: "/usr/bin/cloud-hypervisor", MaxVCPUs: 8, MaxMemoryBytes: 8 << 30,

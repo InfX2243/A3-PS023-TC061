@@ -9,6 +9,10 @@ Work strictly from top to bottom unless a dependency requires a documented chang
 - Keep tasks small enough for one focused AI-assisted change and one review.
 - Add task IDs to commits/PRs, e.g. `T-03: add memory placement policy`.
 
+## Execution note (2026-10-29)
+
+The user explicitly authorized continuing without waiting for environment verification. T-01 feasibility checks are therefore deferred, not passed; no KVM/AWS runtime evidence is available. The existing design proposes Go, a controller-served lightweight UI, SQLite, and systemd, so a provisional Go foundation was added while the feasibility/version/image decisions remain open. T-03 remains unchecked until a Go build/test run verifies the new scaffold.
+
 ## Phase 0 — Feasibility and repository baseline
 
 ### T-00 — Inspect repository and record baseline
@@ -37,6 +41,8 @@ Work strictly from top to bottom unless a dependency requires a documented chang
 ## Phase 1 — Foundation
 
 ### T-03 — Establish project layout and configuration
+- Implementation started: Go module, JSON configuration with validation, example non-secret config, secret/runtime ignore rules, JSON structured logging, graceful HTTP shutdown, `/healthz`, and configuration validation tests are present. See the `T-03` commits on this branch and [README development setup](../README.md).
+- Verification pending: Go commands could not be run from the GitHub-connected editing environment. Do not mark T-03 complete until `go test ./...` and a local `/healthz` smoke test pass.
 - [ ] Add config loading, validation, logging, and graceful startup/shutdown.
 - [ ] Add example non-secret configuration and ignore real secrets.
 - [ ] Add `/healthz` and startup validation.

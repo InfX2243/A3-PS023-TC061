@@ -46,7 +46,7 @@ type dashboardData struct { Workers []domain.Worker; VMs []vmRow; Error string; 
 type formData struct { Limits Limits; Error string; IdempotencyKey string; CSRFToken string }
 
 func NewHandler(service Service, operatorToken string, limits Limits, secureCookie bool) *Handler {
-	return &Handler{service: service, token: operatorToken, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Funcs(template.FuncMap{"divMiB": func(v uint64) uint64 { return v / (1024 * 1024) }, "stateIs": func(state domain.VMState, expected string) bool { return string(state) == expected }}).Parse(pageTemplates))}
+	return &Handler{service: service, token: operatorToken, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Funcs(template.FuncMap{"divMiB": func(v uint64) uint64 { return v / (1024 * 1024) }, "stateIs": func(state domain.VMState, expected string) bool { return string(state) == expected }, "countWorkerState": func(workers []domain.Worker, expected string) int { count := 0; for _, worker := range workers { if string(worker.State) == expected { count++ } }; return count }, "countVMState": func(vms []vmRow, expected string) int { count := 0; for _, vm := range vms { if string(vm.VM.Observed) == expected { count++ } }; return count }, "memoryPercent": func(available, limit uint64) int { if limit == 0 { return 0 }; percent := int(available * 100 / limit); if percent > 100 { return 100 }; if percent < 0 { return 0 }; return percent }}).Parse(pageTemplates))}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {

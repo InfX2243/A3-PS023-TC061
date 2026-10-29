@@ -165,7 +165,7 @@ func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
 		t.Fatalf("documentation status = %d; body=%s", response.Code, response.Body.String())
 	}
 	body := response.Body.String()
-	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\""} {
+	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\"", "id=\"main-content\"", "Skip to main content", "/console"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("documentation page omitted %q", expected)
 		}
@@ -223,5 +223,42 @@ func TestLoginRedirectsToOperatorConsole(t *testing.T) {
 	testUI().ServeHTTP(response, request)
 	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/console" {
 		t.Fatalf("login status/location = %d/%q, want 303 /console", response.Code, response.Header().Get("Location"))
+	}
+}
+
+func TestPrimaryPagesExposeKeyboardSkipNavigation(t *testing.T) {
+	_, handler := newTestUI()
+	loginRequest := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	loginRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	cookie := loginResponse.Result().Cookies()[0]
+
+	pages := []struct {
+		path string
+		cookie bool
+	}{
+		{path: "/", cookie: false},
+		{path: "/docs", cookie: false},
+		{path: "/login", cookie: false},
+		{path: "/console", cookie: true},
+		{path: "/vms/new", cookie: true},
+	}
+	for _, page := range pages {
+		t.Run(page.path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, page.path, nil)
+			if page.cookie {
+				request.AddCookie(cookie)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("GET %s status = %d", page.path, response.Code)
+			}
+			body := response.Body.String()
+			if !strings.Contains(body, "href=\"#main-content\"") || !strings.Contains(body, "id=\"main-content\"") {
+				t.Fatalf("GET %s is missing a working main-content skip link", page.path)
+			}
+		})
 	}
 }

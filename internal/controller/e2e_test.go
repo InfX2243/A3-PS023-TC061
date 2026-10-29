@@ -39,8 +39,8 @@ func newSimulatedWorker(id string) (*simulatedWorker, *httptest.Server) {
 			return
 		}
 		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-		if len(parts) < 4 { rw.WriteHeader(http.StatusNotFound); return }
-		vmID := parts[3]
+		if len(parts) < 5 { rw.WriteHeader(http.StatusNotFound); return }
+		vmID := parts[4]
 		w.mu.Lock()
 		state, exists := w.states[vmID]
 		if r.Method == http.MethodGet && exists {

@@ -29,6 +29,10 @@ type candidate struct {
 }
 
 func PlaceAndReserve(ctx context.Context, tx *sql.Tx, vmID string, memoryBytes uint64, policy Policy, now time.Time) (string, error) {
+	return PlaceAndReserveOnWorker(ctx, tx, vmID, memoryBytes, "", policy, now)
+}
+
+func PlaceAndReserveOnWorker(ctx context.Context, tx *sql.Tx, vmID string, memoryBytes uint64, preferredWorkerID string, policy Policy, now time.Time) (string, error) {
 	if tx == nil { return "", errors.New("placement transaction must not be nil") }
 	if vmID == "" || memoryBytes == 0 || memoryBytes > uint64(1<<63-1) {
 		return "", errors.New("VM ID and a positive SQLite-compatible memory size are required")
@@ -81,6 +85,7 @@ func PlaceAndReserve(ctx context.Context, tx *sql.Tx, vmID string, memoryBytes u
 	var best *candidate
 	for i := range candidates {
 		c := &candidates[i]
+		if preferredWorkerID != "" && c.id != preferredWorkerID { continue }
 		c.reserved = reservedByWorker[c.id]
 		c.reservedSinceHeartbeat = reservedSinceHeartbeat[c.id]
 		availableCapacity := uint64(0)

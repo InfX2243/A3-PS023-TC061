@@ -11,6 +11,9 @@ import (
 	"time"
 
 	"github.com/InfX2243/A3-PS023-TC061/internal/config"
+	"github.com/InfX2243/A3-PS023-TC061/internal/controller"
+	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
+	"github.com/InfX2243/A3-PS023-TC061/internal/store"
 	"github.com/InfX2243/A3-PS023-TC061/internal/workerhealth"
 )
 
@@ -23,9 +26,22 @@ func main() {
 		slog.Error("configuration invalid", "error", err)
 		os.Exit(2)
 	}
-
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
+
+	db, err := store.Open(context.Background(), cfg.DatabasePath)
+	if err != nil {
+		slog.Error("open controller database", "error", err)
+		os.Exit(2)
+	}
+	defer func() {
+		if err := db.Close(); err != nil { slog.Error("close controller database", "error", err) }
+	}()
+	service, err := controller.NewService(context.Background(), db, cfg)
+	if err != nil {
+		slog.Error("initialize controller service", "error", err)
+		os.Exit(2)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -33,28 +49,31 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("{\"status\":\"ok\"}\n"))
 	})
-
-	workers := workerhealth.NewRegistry(workerhealth.DefaultStaleAfter)
-	workerhealth.NewHandler(workers, cfg.WorkerSharedSecret, cfg.OperatorToken).Register(mux)
+	allowedImages := make(map[string]struct{}, len(cfg.AllowedImages))
+	for _, image := range cfg.AllowedImages { allowedImages[image] = struct{}{} }
+	controllerapi.NewHandler(service, cfg.OperatorToken, controllerapi.Limits{
+		MaxVCPUs: cfg.MaxVCPUs,
+		MaxMemoryMiB: cfg.MaxMemoryMiB,
+		AllowedImages: allowedImages,
+	}).Register(mux)
+	registry := workerhealth.NewRegistry(workerhealth.DefaultStaleAfter)
+	workerhealth.NewHandlerWithRecorder(registry, cfg.WorkerSharedSecret, cfg.OperatorToken, service).RegisterHeartbeatOnly(mux)
 
 	server := &http.Server{
-		Addr:              cfg.ListenAddr,
-		Handler:           mux,
+		Addr: cfg.ListenAddr,
+		Handler: mux,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadTimeout: 15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout: 60 * time.Second,
 	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("controller starting", "listen_addr", cfg.ListenAddr)
 		errCh <- server.ListenAndServe()
 	}()
-
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout())

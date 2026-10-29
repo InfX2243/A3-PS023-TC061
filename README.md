@@ -39,3 +39,33 @@ The current planning branch contains the implementation requirements, architectu
 Start with the [MVP documentation index](docs/README.md) and complete one verified task at a time using [docs/tasks.md](docs/tasks.md).
 
 **AWS prerequisite:** Cloud Hypervisor requires KVM. The deployment plan begins with validating `/dev/kvm` and booting the intended guest on the exact candidate worker configuration before provisioning the full environment.
+
+## 🧑‍💻 Development setup and baseline
+
+This branch is currently a planning/documentation baseline, not yet a buildable application. The repository files inspected for this baseline include the root README, the MVP task plan, and `src/README.md`; the latter is a placeholder instructing contributors to add implementation files.
+
+### Inspect a clean checkout
+
+```sh
+git clone https://github.com/InfX2243/A3-PS023-TC061.git
+cd A3-PS023-TC061
+git status --short
+find . -maxdepth 3 -type f -not -path './.git/*' | sort
+```
+
+For the current planning branch, check it out after cloning:
+
+```sh
+git fetch origin
+git switch docs/mvp-requirements-design-task-plan
+```
+
+### Build and test status
+
+- **Language/toolchain:** Not established in the inspected application files; no application source or dependency manifest is present in this baseline.
+- **Build command:** Not available yet; no build configuration was found in the inspected files.
+- **Test command:** Not available yet; no test configuration or test suite was found in the inspected files.
+- **Runtime checks:** Not run. This documentation-only inspection does not establish KVM or Cloud Hypervisor availability.
+- **Next step:** Follow T-01 in `docs/tasks.md` to collect worker-environment feasibility evidence before locking implementation decisions.
+
+Do not treat the absence of build/test commands as a passing build or test result. Add the appropriate toolchain, build, and test commands when the implementation foundation is selected.

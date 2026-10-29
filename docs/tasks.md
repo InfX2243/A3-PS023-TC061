@@ -106,7 +106,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [ ] Run `gofmt` and `go test ./...`; address compile/test failures.
 - [ ] Add persistent worker-side recovery and restart behavior where required by T-09/T-14 integration.
 - Acceptance: create/start/stop/status work on one host; repeated commands do not spawn duplicate VM processes; invalid image/path inputs are rejected; child processes are reaped.
-- Evidence: worker implementation and focused tests added in commits `aeb9da1`, `4154a3c`, `bf915aa`, `44e54eb`, `2c78fa4`, `f24edab`, and `3a8b012`; README usage updated in `a5e5d14`. Tests have not been run in this environment.
+- Evidence: implementation files are present at `internal/workeragent/manager.go`, `internal/workeragent/http.go`, `internal/workeragent/manager_test.go`, `internal/workeragent/integration_test.go`, `cmd/worker-agent/main.go`, and `worker.example.json`; usage is documented in `README.md`. Focused tests have been added but not yet executed.
 - Status: **implementation added; verification pending**. The process runner is designed for Linux workers and has not yet been tested against a real Cloud Hypervisor binary.
 - Depends on: T-06, T-07 implementation (T-07 test execution remains pending by user direction).
 
@@ -130,7 +130,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 ### T-11 — Implement memory placement and atomic reservations
 - [ ] Run placement tests for byte arithmetic, stale/unhealthy workers, insufficient capacity, deterministic tie-breaks, and concurrent requests.
 - [ ] Verify reservations are committed in the same transaction as VM/operation creation and do not exceed the safe memory budget.
-- Implementation present: `internal/placement/placement.go` performs healthy/fresh worker filtering, safe-capacity calculation, deterministic selection, and reservation insert/reactivation inside the caller's SQL transaction. Pending reservations are subtracted from both observed available memory and configured limits.
+- Implementation present: `internal/placement/placement.go` performs healthy/fresh worker filtering, safe-capacity calculation, deterministic selection, and reservation insert/reactivation inside the caller's SQL transaction. Reservations created after the latest heartbeat are subtracted from the observed available-memory snapshot; all pending/active reservations are subtracted from the configured cap.
 - Acceptance: unit and concurrency tests prove no tracked over-reservation under simultaneous create requests.
 - Status: **placement implementation and tests present; execution pending**.
 - Depends on: T-05, T-06, T-10.

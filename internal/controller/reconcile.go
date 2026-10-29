@@ -50,6 +50,7 @@ func (s *Service) Reconcile(ctx context.Context) error {
 			continue
 		}
 		report, err := s.workers.status(ctx, item.endpoint, item.vmID)
+		if err == nil && report.WorkerID != item.workerID { err = &workerCallError{Unknown:true, cause:errors.New("worker identity mismatch")} }
 		if err != nil {
 			// A timeout, 404 after worker restart, or unreachable host does not
 			// prove the guest is stopped. Preserve unknown state and reservation.

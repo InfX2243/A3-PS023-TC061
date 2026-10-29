@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -130,8 +131,10 @@ func loadConfig(path string) (fileConfig, error) {
 	if cfg.StartupTimeoutMS < 1 || cfg.StartupTimeoutMS > 120000 { return fileConfig{}, errors.New("startup_timeout_ms must be between 1 and 120000") }
 	if cfg.HeartbeatIntervalSeconds < 1 || cfg.HeartbeatIntervalSeconds > 300 { return fileConfig{}, errors.New("heartbeat_interval_seconds must be between 1 and 300") }
 	if cfg.ControllerHeartbeatURL != "" {
-		u, err := http.NewRequest(http.MethodPost, cfg.ControllerHeartbeatURL, nil)
-		if err != nil || (u.URL.Scheme != "http" && u.URL.Scheme != "https") || u.URL.Host == "" { return fileConfig{}, errors.New("controller_heartbeat_url must be an absolute http(s) URL") }
+		u, err := url.Parse(cfg.ControllerHeartbeatURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return fileConfig{}, errors.New("controller_heartbeat_url must be an absolute http(s) URL without credentials, query, or fragment")
+		}
 	}
 	return cfg, nil
 }

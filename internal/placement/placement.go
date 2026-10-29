@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 )
 
@@ -29,7 +28,7 @@ type candidate struct {
 
 func PlaceAndReserve(ctx context.Context, tx *sql.Tx, vmID string, memoryBytes uint64, policy Policy, now time.Time) (string, error) {
 	if tx == nil { return "", errors.New("placement transaction must not be nil") }
-	if vmID == "" || memoryBytes == 0 || memoryBytes > math.MaxInt64 {
+	if vmID == "" || memoryBytes == 0 || memoryBytes > uint64(1<<63-1) {
 		return "", errors.New("VM ID and a positive SQLite-compatible memory size are required")
 	}
 	if policy.StaleAfter <= 0 { return "", errors.New("worker stale threshold must be positive") }

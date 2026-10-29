@@ -59,21 +59,25 @@ func newWorkerClient(secret string, timeout time.Duration) *workerClient {
 func (c *workerClient) prepare(ctx context.Context, endpoint string, req workerVMRequest) (workerVMReport, error) {
 	var result workerVMReport
 	err := c.call(ctx, endpoint, http.MethodPost, "/api/v1/worker/vms", req, &result)
+	if err == nil && (result.VMID != req.VMID || result.OperationID != req.OperationID) { return workerVMReport{}, &workerCallError{Unknown:true, cause:errors.New("worker response identity mismatch")} }
 	return result, err
 }
 func (c *workerClient) start(ctx context.Context, endpoint, vmID, operationID string) (workerVMReport, error) {
 	var result workerVMReport
 	err := c.call(ctx, endpoint, http.MethodPost, "/api/v1/worker/vms/"+vmID+"/start", workerOperationRequest{OperationID: operationID}, &result)
+	if err == nil && (result.VMID != vmID || result.OperationID != operationID) { return workerVMReport{}, &workerCallError{Unknown:true, cause:errors.New("worker response identity mismatch")} }
 	return result, err
 }
 func (c *workerClient) stop(ctx context.Context, endpoint, vmID, operationID string) (workerVMReport, error) {
 	var result workerVMReport
 	err := c.call(ctx, endpoint, http.MethodPost, "/api/v1/worker/vms/"+vmID+"/stop", workerOperationRequest{OperationID: operationID}, &result)
+	if err == nil && (result.VMID != vmID || result.OperationID != operationID) { return workerVMReport{}, &workerCallError{Unknown:true, cause:errors.New("worker response identity mismatch")} }
 	return result, err
 }
 func (c *workerClient) status(ctx context.Context, endpoint, vmID string) (workerVMReport, error) {
 	var result workerVMReport
 	err := c.call(ctx, endpoint, http.MethodGet, "/api/v1/worker/vms/"+vmID, nil, &result)
+	if err == nil && result.VMID != vmID { return workerVMReport{}, &workerCallError{Unknown:true, cause:errors.New("worker response identity mismatch")} }
 	return result, err
 }
 

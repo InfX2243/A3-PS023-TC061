@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -193,4 +192,3 @@ func probeKVMAndVMM(ctx context.Context, binary string) bool {
 	return true
 }
 
-var _ = net.JoinHostPort

@@ -12,7 +12,7 @@ The repository intentionally does not contain a populated .env because it would 
 ```sh
 cp .env.example .env
 chmod 600 .env
-# Replace both placeholders with independently generated values:
+# Generate independent values for the API/session token, worker shared secret, and operator password:
 openssl rand -hex 32
 ```
 

@@ -102,6 +102,20 @@ func (r *Registry) List() []Report {
 	return reports
 }
 
+// MarkUnreachable records an explicit failed probe or transport failure. A later
+// valid heartbeat replaces this status with the newly reported health.
+func (r *Registry) MarkUnreachable(id string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	report, ok := r.workers[id]
+	if !ok {
+		return false
+	}
+	report.Status = StatusUnreachable
+	r.workers[id] = report
+	return true
+}
+
 func (r *Registry) Get(id string) (Report, bool) {
 	for _, report := range r.List() {
 		if report.WorkerID == id {

@@ -12,6 +12,7 @@ Planning branch: `docs/mvp-requirements-design-task-plan`
 4. [AI-driven development workflow](./ai-development-workflow.md) — how to implement and review one task at a time.
 5. [AWS deployment plan](./aws-deployment.md) — prerequisites, network layout, rollout, validation, and cost guardrails.
 6. [AWS worker feasibility gate](./deployment/aws-worker-validation.md) — selected EC2 candidate, pinned VMM/guest candidates, and required runtime evidence.
+7. [Cloud Hypervisor v54.0 API contract](./cloudhypervisor-api-v54.md) — pinned endpoint and schema contract used by the Go adapter.
 
 ## MVP north star
 

@@ -39,12 +39,48 @@ func (s *Service) ensureConfiguredWorkers(ctx context.Context) error {
 			limit := worker.MemoryLimitMiB * 1024 * 1024
 			_, err := tx.ExecContext(ctx, `INSERT INTO workers(id, name, endpoint, state, last_heartbeat, available_memory_bytes, memory_limit_bytes, created_at, updated_at)
 				VALUES (?, ?, ?, 'unreachable', NULL, 0, ?, ?, ?)
-				ON CONFLICT(id) DO UPDATE SET name=excluded.name, endpoint=excluded.endpoint,
-					state='unreachable', last_heartbeat=NULL, available_memory_bytes=0,
-					memory_limit_bytes=excluded.memory_limit_bytes, updated_at=excluded.updated_at`,
+				ON CONFLICT(id) DO NOTHING`,
 				worker.ID, worker.Name, strings.TrimRight(worker.Endpoint, "/"), int64(limit), now, now)
 			if err != nil { return fmt.Errorf("register configured worker %q: %w", worker.ID, err) }
 		}
+		return nil
+	})
+}
+
+// RegisterWorker persists a user-managed worker independently of static JSON config.
+func (s *Service) RegisterWorker(ctx context.Context, id, name, endpoint string, memoryLimitMiB uint64) error {
+	if s.cfg.WorkerSharedSecret == "" {
+		return errors.New("VM_CONTROLLER_WORKER_SHARED_SECRET must be configured before adding workers")
+	}
+	candidate := s.cfg
+	candidate.Workers = []config.WorkerEndpoint{{ID:id, Name:name, Endpoint:endpoint, MemoryLimitMiB:memoryLimitMiB}}
+	if err := candidate.Validate(); err != nil { return err }
+	now := s.now().UTC().Format(time.RFC3339Nano)
+	_, err := s.store.DB().ExecContext(ctx, `INSERT INTO workers
+		(id, name, endpoint, state, last_heartbeat, available_memory_bytes, memory_limit_bytes, created_at, updated_at)
+		VALUES (?, ?, ?, 'unreachable', NULL, 0, ?, ?, ?)`,
+		id, strings.TrimSpace(name), strings.TrimRight(endpoint, "/"), int64(memoryLimitMiB*1024*1024), now, now)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") || strings.Contains(strings.ToLower(err.Error()), "constraint") {
+			return fmt.Errorf("worker ID %q is already registered", id)
+		}
+		return fmt.Errorf("register worker: %w", err)
+	}
+	return nil
+}
+
+// DeleteWorker removes only controller metadata; it never stops or terminates cloud infrastructure.
+func (s *Service) DeleteWorker(ctx context.Context, id string) error {
+	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		var vmCount, reservationCount int
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM vms WHERE worker_id = ?", id).Scan(&vmCount); err != nil { return fmt.Errorf("check worker VM assignments: %w", err) }
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM reservations WHERE worker_id = ?", id).Scan(&reservationCount); err != nil { return fmt.Errorf("check worker reservations: %w", err) }
+		if vmCount > 0 || reservationCount > 0 { return fmt.Errorf("worker still has %d VM assignment(s) and %d reservation(s); migrate or remove them first", vmCount, reservationCount) }
+		result, err := tx.ExecContext(ctx, "DELETE FROM workers WHERE id = ?", id)
+		if err != nil { return fmt.Errorf("delete worker registration: %w", err) }
+		n, err := result.RowsAffected()
+		if err != nil { return fmt.Errorf("confirm worker deletion: %w", err) }
+		if n == 0 { return controllerapi.ErrNotFound }
 		return nil
 	})
 }

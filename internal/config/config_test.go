@@ -56,3 +56,27 @@ func TestWorkerEndpointConfigurationValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestOperatorCredentialsMustBePairedAndStrong(t *testing.T) {
+	tests := []struct {
+		name string
+		username string
+		password string
+		wantErr bool
+	}{
+		{name: "both omitted", wantErr: false},
+		{name: "username only", username: "operator", wantErr: true},
+		{name: "password only", password: "1234567890123456", wantErr: true},
+		{name: "short password", username: "operator", password: "short", wantErr: true},
+		{name: "valid credentials", username: "operator", password: "a-long-random-password-value", wantErr: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Defaults()
+			cfg.OperatorUsername, cfg.OperatorPassword = tc.username, tc.password
+			cfg.OperatorToken = "session-signing-token"
+			err := cfg.Validate()
+			if (err != nil) != tc.wantErr { t.Fatalf("Validate() error = %v, wantErr %v", err, tc.wantErr) }
+		})
+	}
+}

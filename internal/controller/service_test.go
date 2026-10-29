@@ -187,3 +187,58 @@ func TestReconcilePreservesUnknownWhenWorkerCannotConfirmState(t *testing.T) {
 		t.Fatalf("unconfirmed outcome was altered: vm=%#v op=%#v reservation=%q", vm, op, reservation)
 	}
 }
+
+func TestRegisterWorkerPersistsAndDeregistrationIsSafe(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, ":memory:")
+	if err != nil { t.Fatal(err) }
+	defer st.Close()
+	cfg := config.Defaults()
+	cfg.WorkerSharedSecret = "worker-secret"
+	cfg.Workers = nil
+	svc, err := NewService(ctx, st, cfg)
+	if err != nil { t.Fatal(err) }
+	if err := svc.RegisterWorker(ctx, "bring-your-own-1", "BYO Worker", "https://worker.example.internal:9090", 4096); err != nil {
+		t.Fatalf("register worker: %v", err)
+	}
+	workers, err := svc.ListWorkers(ctx)
+	if err != nil { t.Fatal(err) }
+	if len(workers) != 1 || workers[0].ID != "bring-your-own-1" || workers[0].Name != "BYO Worker" || workers[0].State != domain.WorkerUnavailable {
+		t.Fatalf("unexpected registered worker inventory: %#v", workers)
+	}
+	if err := svc.RegisterWorker(ctx, "bring-your-own-1", "Duplicate", "https://worker.example.internal:9090", 4096); err == nil {
+		t.Fatal("expected duplicate worker ID to be rejected")
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := st.DB().ExecContext(ctx, `INSERT INTO vms
+		(id,name,worker_id,vcpus,memory_bytes,image_id,desired_state,observed_state,created_at,updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?)`, "vm-bound", "VM bound", "bring-your-own-1", 1, 512*1024*1024, "ubuntu-demo", "stopped", "stopped", now, now); err != nil { t.Fatal(err) }
+	if err := svc.DeleteWorker(ctx, "bring-your-own-1"); err == nil {
+		t.Fatal("worker with assigned VMs must not be deregistered")
+	}
+	if _, err := st.DB().ExecContext(ctx, "DELETE FROM vms WHERE id = ?", "vm-bound"); err != nil { t.Fatal(err) }
+	if err := svc.DeleteWorker(ctx, "bring-your-own-1"); err != nil { t.Fatalf("delete unused worker registration: %v", err) }
+	workers, err = svc.ListWorkers(ctx)
+	if err != nil { t.Fatal(err) }
+	if len(workers) != 0 { t.Fatalf("workers after deletion = %#v, want empty", workers) }
+}
+
+func TestConfiguredWorkerStartupDoesNotResetPersistedState(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, ":memory:")
+	if err != nil { t.Fatal(err) }
+	defer st.Close()
+	cfg := config.Defaults()
+	cfg.WorkerSharedSecret = "worker-secret"
+	cfg.Workers = []config.WorkerEndpoint{{ID:"worker-a", Name:"Worker A", Endpoint:"http://worker-a.internal:9090", MemoryLimitMiB:4096}}
+	first, err := NewService(ctx, st, cfg)
+	if err != nil { t.Fatal(err) }
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if _, err := st.DB().ExecContext(ctx, "UPDATE workers SET state='healthy', last_heartbeat=?, available_memory_bytes=? WHERE id='worker-a'", now, 1024); err != nil { t.Fatal(err) }
+	if _, err := NewService(ctx, st, cfg); err != nil { t.Fatal(err) }
+	workers, err := first.ListWorkers(ctx)
+	if err != nil { t.Fatal(err) }
+	if len(workers) != 1 || workers[0].State != domain.WorkerHealthy || workers[0].AvailableMemoryBytes != 1024 {
+		t.Fatalf("startup reset persisted worker state: %#v", workers)
+	}
+}

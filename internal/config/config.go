@@ -33,6 +33,8 @@ type Config struct {
 	SecureCookies          bool             `json:"secure_cookies"`
 	ShutdownTimeoutSeconds int              `json:"shutdown_timeout_seconds"`
 	OperatorToken          string           `json:"-"`
+	OperatorUsername       string           `json:"-"`
+	OperatorPassword       string           `json:"-"`
 	WorkerSharedSecret     string           `json:"-"`
 }
 
@@ -71,6 +73,8 @@ func Load(path string) (Config, error) {
 	if v, ok := os.LookupEnv("VM_CONTROLLER_LISTEN_ADDR"); ok { cfg.ListenAddr = strings.TrimSpace(v) }
 	if v, ok := os.LookupEnv("VM_CONTROLLER_DATABASE_PATH"); ok { cfg.DatabasePath = strings.TrimSpace(v) }
 	if v, ok := os.LookupEnv("VM_CONTROLLER_OPERATOR_TOKEN"); ok { cfg.OperatorToken = v }
+	if v, ok := os.LookupEnv("VM_CONTROLLER_OPERATOR_USERNAME"); ok { cfg.OperatorUsername = strings.TrimSpace(v) }
+	if v, ok := os.LookupEnv("VM_CONTROLLER_OPERATOR_PASSWORD"); ok { cfg.OperatorPassword = v }
 	if v, ok := os.LookupEnv("VM_CONTROLLER_WORKER_SHARED_SECRET"); ok { cfg.WorkerSharedSecret = v }
 	if v, ok := os.LookupEnv("VM_CONTROLLER_MAX_VCPUS"); ok {
 		n, err := strconv.Atoi(v)
@@ -81,6 +85,9 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if (c.OperatorUsername == "") != (c.OperatorPassword == "") { return errors.New("VM_CONTROLLER_OPERATOR_USERNAME and VM_CONTROLLER_OPERATOR_PASSWORD must be set together") }
+	if c.OperatorUsername != "" && len(c.OperatorPassword) < 16 { return errors.New("VM_CONTROLLER_OPERATOR_PASSWORD must be at least 16 characters") }
+	if c.OperatorUsername != "" && c.OperatorToken == "" { return errors.New("VM_CONTROLLER_OPERATOR_TOKEN is required when username/password login is configured") }
 	if strings.TrimSpace(c.ListenAddr) == "" { return errors.New("listen_addr must not be empty") }
 	if strings.TrimSpace(c.DatabasePath) == "" { return errors.New("database_path must not be empty") }
 	if c.MaxVCPUs < 1 || c.MaxVCPUs > 256 { return errors.New("max_vcpus must be between 1 and 256") }

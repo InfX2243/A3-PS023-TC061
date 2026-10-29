@@ -20,6 +20,14 @@ Start with the [MVP documentation index](docs/README.md), [requirements](docs/re
 
 Cloud Hypervisor requires KVM. Worker environment feasibility remains a deployment gate; this repository does not claim that KVM or an AWS worker configuration has been verified.
 
+## Deployment and infrastructure onboarding
+
+See [controller deployment and worker onboarding](deploy/README.md) for the EC2 controller setup, systemd unit, TLS reverse-proxy example, durable SQLite storage, secret handling, and bring-your-own-worker checklist. A small `t3.micro` is a controller candidate only; worker hosts must independently satisfy KVM/Cloud Hypervisor requirements.
+
+The controller now supports a persistent worker registry in the console at `/workers`. Registrations are stored in SQLite and survive controller restarts. Removing a registration removes controller metadata only; it does not terminate cloud infrastructure. Agent health (healthy, stale, unreachable) is distinct from authoritative cloud lifecycle state. AWS EC2 lifecycle status and start/stop/terminate actions require a separately configured AWS integration and least-privilege IAM permissions; they must not be inferred from heartbeat loss.
+
+Copy `.env.example` to a local `.env`, replace the operator token, operator password, and worker shared secret with independent values, set an operator username, and run `chmod 600 .env`. The browser UI supports username/password sign-in; the operator token remains the API bearer secret and session-signing key. The controller loads a local `.env` without shell evaluation and does not override environment variables already set by the process. Never commit `.env` or real credentials. Production deployments should supply secrets through the service manager's protected environment file or a secret manager.
+
 ## Development setup
 
 The controller and worker agent use Go 1.23 or newer. The worker agent is configured separately from the controller.

@@ -22,6 +22,11 @@ func main() {
 	configPath := flag.String("config", "config.json", "path to controller JSON configuration (optional)")
 	flag.Parse()
 
+	if err := config.LoadDotEnv(".env"); err != nil {
+		slog.Error("load environment file", "error", err)
+		os.Exit(2)
+	}
+
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		slog.Error("configuration invalid", "error", err)
@@ -57,7 +62,7 @@ func main() {
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: allowedImages,
 	}).Register(mux)
-	webui.NewHandler(service, cfg.OperatorToken, webui.Limits{
+	webui.NewHandlerWithCredentials(service, cfg.OperatorToken, cfg.OperatorUsername, cfg.OperatorPassword, webui.Limits{
 		MaxVCPUs: cfg.MaxVCPUs,
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: cfg.AllowedImages,

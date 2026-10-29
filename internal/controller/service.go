@@ -186,7 +186,9 @@ func (s *Service) CreateVM(ctx context.Context, req controllerapi.CreateVMReques
 			vm, err = scanVM(tx.QueryRowContext(ctx, `SELECT id, name, worker_id, vcpus, memory_bytes, image_id, desired_state, observed_state, created_at, updated_at FROM vms WHERE id = ?`, existingVMID))
 			if err != nil { return err }
 			op, err = scanOperation(tx.QueryRowContext(ctx, "SELECT "+operationColumns+" FROM operations WHERE idempotency_key = ?", key))
-			return err
+			if err != nil { return err }
+			if vm.Name != req.Name || vm.VCPUs != req.VCPUs || vm.MemoryBytes != memoryBytes || vm.ImageID != req.ImageID { return controllerapi.ErrConflict }
+			return nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) { return fmt.Errorf("check idempotency key: %w", err) }
 		timestamp := now.Format(time.RFC3339Nano)

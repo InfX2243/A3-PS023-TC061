@@ -30,6 +30,7 @@ type Config struct {
 	MemorySafetyReserveMiB uint64           `json:"memory_safety_reserve_mib"`
 	AllowedImages          []string         `json:"allowed_images"`
 	Workers                []WorkerEndpoint `json:"workers"`
+	SecureCookies          bool             `json:"secure_cookies"`
 	ShutdownTimeoutSeconds int              `json:"shutdown_timeout_seconds"`
 	OperatorToken          string           `json:"-"`
 	WorkerSharedSecret     string           `json:"-"`
@@ -44,6 +45,7 @@ func Defaults() Config {
 		MemorySafetyReserveMiB: 1024,
 		AllowedImages: []string{"ubuntu-demo"},
 		Workers: []WorkerEndpoint{},
+		SecureCookies: false,
 		ShutdownTimeoutSeconds: 10,
 	}
 }
@@ -99,7 +101,7 @@ func (c Config) Validate() error {
 		if _, exists := workerIDs[worker.ID]; exists { return fmt.Errorf("duplicate worker ID %q", worker.ID) }
 		workerIDs[worker.ID] = struct{}{}
 		u, err := url.Parse(worker.Endpoint)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 			return fmt.Errorf("worker %q endpoint must be an absolute http(s) URL without credentials, query, or fragment", worker.ID)
 		}
 		if worker.MemoryLimitMiB == 0 || worker.MemoryLimitMiB > 1<<20 {

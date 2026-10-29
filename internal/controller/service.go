@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -170,7 +169,7 @@ func (s *Service) GetOperation(ctx context.Context, id string) (domain.Operation
 }
 
 func (s *Service) CreateVM(ctx context.Context, req controllerapi.CreateVMRequest, key string) (domain.VM, domain.Operation, error) {
-	if req.MemoryMiB > math.MaxUint64/(1024*1024) { return domain.VM{}, domain.Operation{}, controllerapi.ErrInvalid }
+	if req.MemoryMiB > uint64(1<<63-1)/(1024*1024) { return domain.VM{}, domain.Operation{}, controllerapi.ErrInvalid }
 	memoryBytes := req.MemoryMiB * 1024 * 1024
 	vmID, opID := newID("vm"), newID("op")
 	now := s.now().UTC()

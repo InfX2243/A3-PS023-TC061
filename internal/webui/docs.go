@@ -42,7 +42,6 @@ const docsPageTemplate = `
 .docs-nav{display:grid;gap:3px}
 .docs-nav a{font-size:14px;color:#46536b;text-decoration:none;padding:10px 12px;border-radius:7px;line-height:1.45;border-left:3px solid transparent}
 .docs-nav a:hover{background:#eceeff;color:#3437a6}.docs-nav a[aria-current="location"],.docs-nav a.is-active{background:#e8eaff;color:#3437a6;border-left-color:#4d50d2;font-weight:800;box-shadow:inset 0 0 0 1px #d9dcff}
-.docs-nav a.docs-nav-primary{color:#3437a6;font-weight:800}
 .docs-article{min-width:0}
 .docs-section{padding:0 0 36px;margin:0 0 34px;border-bottom:1px solid #e0e5ef;scroll-margin-top:108px}
 .docs-section:last-child{border-bottom:0}
@@ -89,7 +88,7 @@ const docsPageTemplate = `
 <section class="docs-hero"><div class="docs-hero-inner"><div class="docs-kicker">Operator guide · Engineering preview</div><h1>Understand the platform.<br>Operate with confidence.</h1><p>A practical guide to Aiori Compute: what the control plane does, how worker nodes and virtual machines fit together, how to create and operate a VM, and how to interpret states when an operation is still being reconciled.</p><div class="docs-hero-meta"><span class="docs-chip">Architecture and concepts</span><span class="docs-chip">Step-by-step operator workflow</span><span class="docs-chip">Security and troubleshooting</span></div></div></section>
 <div class="docs-layout">
 <aside class="docs-sidebar" aria-label="Documentation contents">
-<div class="docs-nav-label">Start here</div><nav class="docs-nav"><a class="docs-nav-primary" href="#overview" aria-current="location">Platform overview</a><a href="#getting-started">Quick start</a><a href="#architecture">Architecture</a></nav>
+<div class="docs-nav-label">Start here</div><nav class="docs-nav"><a href="#overview" aria-current="location">Platform overview</a><a href="#getting-started">Quick start</a><a href="#architecture">Architecture</a></nav>
 <div class="docs-nav-label">Operate</div><nav class="docs-nav"><a href="#workers">Worker fleet</a><a href="#virtual-machines">Virtual machines</a><a href="#lifecycle">Lifecycle and states</a><a href="#placement">Placement and capacity</a></nav>
 <div class="docs-nav-label">Reference</div><nav class="docs-nav"><a href="#security">Security model</a><a href="#troubleshooting">Troubleshooting</a><a href="#current-limitations">Current limitations</a></nav>
 </aside>

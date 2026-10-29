@@ -98,7 +98,7 @@ Add appropriate unique constraints and indexes, especially for idempotency keys 
 For worker (h), calculate the tracked safe capacity:
 
 [
-C_h = max(0,min(A_h-S_h, L_h-R_h))
+C_h = max(0,min(A_h-S_h-R_h, L_h-R_h))
 ]
 
 Where:
@@ -106,7 +106,7 @@ Where:
 - (A_h): latest host-available memory observation in bytes.
 - (S_h): configured safety reserve.
 - (L_h): configured reservation cap.
-- (R_h): active and pending memory reservations.
+- (R_h): active and pending memory reservations. Pending reservations are subtracted from both observed free memory and the configured cap so concurrent requests cannot reuse the same pre-heartbeat free-memory snapshot.
 - (C_h): safe capacity for a new request.
 
 A host is eligible when it is healthy, its inventory is sufficiently fresh, and (C_h ge M), where (M) is requested VM memory. Select the eligible host with the largest (C_h); use a deterministic tie-breaker.

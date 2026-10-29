@@ -1,7 +1,6 @@
 # Task Plan — One Verifiable Task at a Time
 
 ## How to use this file
-
 Work strictly from top to bottom unless a dependency requires a documented change. Select exactly one unchecked task, implement it, run its acceptance checks, and update this file with evidence before starting the next task.
 
 - [ ] means not yet verified.
@@ -13,10 +12,11 @@ Work strictly from top to bottom unless a dependency requires a documented chang
 ## Phase 0 — Feasibility and repository baseline
 
 ### T-00 — Inspect repository and record baseline
-- [ ] Inspect current files, language, build/test commands, and existing implementation.
-- [ ] Record the existing repository conventions; do not overwrite existing code without understanding it.
-- [ ] Add or update a short development setup section.
+- [x] Inspect current files, language, build/test commands, and existing implementation.
+- [x] Record the existing repository conventions; do not overwrite existing code without understanding it.
+- [x] Add or update a short development setup section.
 - Acceptance: a clean checkout can be inspected and current build/test status is recorded.
+- Evidence: README development setup section added in commit `f5663a78c2fda96bc288f550e39794cab83adad1`. Inspected `README.md`, `src/README.md`, and this task plan on `docs/mvp-requirements-design-task-plan`. The inspected source directory contains only a placeholder; no application source, build manifest, or test configuration was found. No build/test command could be run, and this is explicitly recorded as unavailable rather than passing. KVM/Cloud Hypervisor runtime verification remains T-01.
 - Depends on: none.
 
 ### T-01 — Verify KVM and Cloud Hypervisor feasibility

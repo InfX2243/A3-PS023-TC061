@@ -42,7 +42,7 @@ func newTestUI() (*Handler, http.Handler) {
 
 func TestDashboardRequiresLoginAndSetsSecurityHeaders(t *testing.T) {
 	response := httptest.NewRecorder()
-	testUI().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+	testUI().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/console", nil))
 	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/login" { t.Fatalf("unauthenticated dashboard status/location = %d/%q", response.Code, response.Header().Get("Location")) }
 
 	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
@@ -51,7 +51,7 @@ func TestDashboardRequiresLoginAndSetsSecurityHeaders(t *testing.T) {
 	testUI().ServeHTTP(loginResponse, login)
 	if loginResponse.Code != http.StatusSeeOther { t.Fatalf("login status = %d", loginResponse.Code) }
 	cookie := loginResponse.Result().Cookies()[0]
-	dashboard := httptest.NewRequest(http.MethodGet, "/", nil)
+	dashboard := httptest.NewRequest(http.MethodGet, "/console", nil)
 	dashboard.AddCookie(cookie)
 	dashboardResponse := httptest.NewRecorder()
 	testUI().ServeHTTP(dashboardResponse, dashboard)
@@ -97,7 +97,7 @@ func TestCreateFormRequiresCSRFAndPassesStableIdempotencyKey(t *testing.T) {
 	rejected := httptest.NewRecorder()
 	handler.ServeHTTP(rejected, withoutCSRF)
 	if rejected.Code != http.StatusForbidden { t.Fatalf("missing CSRF status=%d, want 403", rejected.Code) }
-	cookieRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	cookieRequest := httptest.NewRequest(http.MethodGet, "/console", nil)
 	cookieRequest.AddCookie(cookie)
 	values.Set("csrf_token", h.csrfToken(cookieRequest))
 	request := httptest.NewRequest(http.MethodPost, "/vms", strings.NewReader(values.Encode()))
@@ -148,7 +148,7 @@ func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
 	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	loginResponse := httptest.NewRecorder()
 	mux.ServeHTTP(loginResponse, login)
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request := httptest.NewRequest(http.MethodGet, "/console", nil)
 	request.AddCookie(loginResponse.Result().Cookies()[0])
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
@@ -180,7 +180,7 @@ func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testi
 	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	loginResponse := httptest.NewRecorder()
 	testUI().ServeHTTP(loginResponse, login)
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request := httptest.NewRequest(http.MethodGet, "/console", nil)
 	request.AddCookie(loginResponse.Result().Cookies()[0])
 	response := httptest.NewRecorder()
 	testUI().ServeHTTP(response, request)
@@ -196,5 +196,32 @@ func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testi
 	}
 	if strings.Contains(body, "Operational signals") {
 		t.Fatal("dashboard retained a redundant inventory summary")
+	}
+}
+
+func TestLandingPageIsPublicAndHasDistinctDocumentationAndLoginRoutes(t *testing.T) {
+	response := httptest.NewRecorder()
+	testUI().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("landing status = %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{"Infrastructure operations,", "href=\"/docs\"", "href=\"/login\"", "id=\"platform\"", "prefers-reduced-motion", "illustrative interface preview"} {
+		if !strings.Contains(strings.ToLower(body), strings.ToLower(expected)) {
+			t.Fatalf("landing page omitted %q", expected)
+		}
+	}
+	if strings.Contains(body, "name=\"token\"") {
+		t.Fatal("public landing page should not contain the operator login form")
+	}
+}
+
+func TestLoginRedirectsToOperatorConsole(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	testUI().ServeHTTP(response, request)
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/console" {
+		t.Fatalf("login status/location = %d/%q, want 303 /console", response.Code, response.Header().Get("Location"))
 	}
 }

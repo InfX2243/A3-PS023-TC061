@@ -223,9 +223,9 @@ func (s *Service) CreateVM(ctx context.Context, req controllerapi.CreateVMReques
 
 	report, callErr := s.workers.prepare(ctx, endpoint, workerVMRequest{OperationID: opID, VMID: vm.ID, Name: vm.Name, VCPUs: vm.VCPUs, MemoryBytes: vm.MemoryBytes, ImageID: vm.ImageID})
 	switch {
-	case callErr == nil && report.State == "Created":
+	case callErr == nil && report.State == "Created" && report.WorkerID == vm.WorkerID:
 		err = s.finishOperation(ctx, vm.ID, op.ID, domain.OperationSucceeded, domain.VMStopped, domain.VMStopped, "active", "", "")
-	case isUnknownWorkerOutcome(callErr) || (callErr == nil && report.State != "Created"):
+	case isUnknownWorkerOutcome(callErr) || (callErr == nil && (report.State != "Created" || report.WorkerID != vm.WorkerID)):
 		err = s.finishOperation(ctx, vm.ID, op.ID, domain.OperationUnknown, domain.VMStopped, domain.VMUnknown, "pending", "outcome_unknown", "worker outcome requires reconciliation")
 	default:
 		err = s.finishOperation(ctx, vm.ID, op.ID, domain.OperationFailed, domain.VMStopped, domain.VMFailed, "released", "worker_rejected", "worker did not create the VM")
@@ -276,9 +276,9 @@ func (s *Service) StartVM(ctx context.Context, vmID string) (domain.VM, domain.O
 	if op.ID != opID { return vm, op, nil }
 	report, callErr := s.workers.start(ctx, endpoint, vmID, opID)
 	switch {
-	case callErr == nil && report.State == "Running":
+	case callErr == nil && report.State == "Running" && report.WorkerID == vm.WorkerID:
 		err = s.finishOperation(ctx, vmID, opID, domain.OperationSucceeded, domain.VMRunning, domain.VMRunning, "active", "", "")
-	case isUnknownWorkerOutcome(callErr) || (callErr == nil && report.State != "Running"):
+	case isUnknownWorkerOutcome(callErr) || (callErr == nil && (report.State != "Running" || report.WorkerID != vm.WorkerID)):
 		err = s.finishOperation(ctx, vmID, opID, domain.OperationUnknown, domain.VMRunning, domain.VMUnknown, "pending", "outcome_unknown", "worker outcome requires reconciliation")
 	default:
 		err = s.finishOperation(ctx, vmID, opID, domain.OperationFailed, domain.VMStopped, domain.VMStopped, "active", "worker_rejected", "worker did not confirm VM start")
@@ -320,9 +320,9 @@ func (s *Service) StopVM(ctx context.Context, vmID string) (domain.VM, domain.Op
 	if op.ID != opID { return vm, op, nil }
 	report, callErr := s.workers.stop(ctx, endpoint, vmID, opID)
 	switch {
-	case callErr == nil && report.State == "Shutdown":
+	case callErr == nil && report.State == "Shutdown" && report.WorkerID == vm.WorkerID:
 		err = s.finishOperation(ctx, vmID, opID, domain.OperationSucceeded, domain.VMStopped, domain.VMStopped, "active", "", "")
-	case isUnknownWorkerOutcome(callErr) || (callErr == nil && report.State != "Shutdown"):
+	case isUnknownWorkerOutcome(callErr) || (callErr == nil && (report.State != "Shutdown" || report.WorkerID != vm.WorkerID)):
 		err = s.finishOperation(ctx, vmID, opID, domain.OperationUnknown, domain.VMStopped, domain.VMUnknown, "active", "outcome_unknown", "worker outcome requires reconciliation")
 	default:
 		err = s.finishOperation(ctx, vmID, opID, domain.OperationFailed, domain.VMRunning, domain.VMRunning, "active", "worker_rejected", "worker did not confirm VM stop")

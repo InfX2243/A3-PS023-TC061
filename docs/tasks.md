@@ -11,7 +11,7 @@ Work strictly from top to bottom unless a dependency requires a documented chang
 
 ## Execution note (2026-10-29)
 
-The user selected AWS EC2 as the worker environment and asked to resolve T-01/T-02 before any further T-07 work. The initial feasibility candidate is one temporary `c8i.xlarge` in `ap-south-1`, Ubuntu Server 24.04.5 LTS x86-64 host, Cloud Hypervisor v54.0, and the versioned Ubuntu 24.04 LTS cloud image build dated 2026-10-17. Decisions and the evidence procedure are documented in [AWS worker feasibility gate](./deployment/aws-worker-validation.md). These are selected candidates, not deployment/test evidence: no AWS instance has been launched and no guest has booted. T-01 and T-02 remain blocked until the documented runtime evidence is captured. Do not advance T-07.
+The user selected AWS EC2 and explicitly accepted AWS's official nested-virtualization documentation as the platform-support evidence: the linked AWS page lists C8i as supported, KVM as a supported L1 hypervisor, and `NestedVirtualization=enabled` as the launch option. This resolves the **architecture/platform support question**, not the instance-specific guest boot test. The working candidate remains one temporary `c8i.xlarge` in `ap-south-1`, Ubuntu Server 24.04.5 LTS x86-64 host, Cloud Hypervisor v54.0, and the versioned Ubuntu 24.04 LTS cloud image build dated 2026-10-17. The candidate choices and runtime evidence procedure are in [AWS worker feasibility gate](./deployment/aws-worker-validation.md). Per the user's decision, T-07 adapter-contract implementation may proceed against the pinned v54.0 OpenAPI contract; actual KVM/guest boot-stop, artifact checksum capture, and immutable image allowlisting remain mandatory deployment gates before two-worker rollout. No AWS instance has been launched and no guest has booted.
 
 ## Phase 0 — Feasibility and repository baseline
 
@@ -24,12 +24,13 @@ The user selected AWS EC2 as the worker environment and asked to resolve T-01/T-
 - Depends on: none.
 
 ### T-01 — Verify KVM and Cloud Hypervisor feasibility
-- [x] Select a specific AWS candidate for the short-lived feasibility run: one `c8i.xlarge` in `ap-south-1` (Mumbai). AWS's published family support and regional type listing support this as a candidate; actual instance behavior is not yet verified.
+- [x] Confirm platform-level nested virtualization support from AWS's official documentation: C8i is listed as supported, KVM is a supported nested hypervisor, and launch-time enablement uses `NestedVirtualization=enabled` ([AWS documentation](https://docs.amazonaws.cn/en_us/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html)). This is accepted as architecture feasibility evidence per user direction.
+- [x] Select a specific AWS candidate for the short-lived feasibility run: one `c8i.xlarge` in `ap-south-1` (Mumbai).
 - [ ] Record actual EC2 AMI ID, OS/kernel, CPU virtualization flags, `/dev/kvm` permissions, Cloud Hypervisor v54.0 binary checksum, and exact guest-image SHA-256. Required commands and redaction guidance are in [AWS worker feasibility gate](./deployment/aws-worker-validation.md).
 - [ ] Boot and stop the pinned Ubuntu cloud image on the candidate instance. Record reproducible config/commands, running and stopped status queries, guest-ready evidence, and process cleanup.
-- [ ] Validate the candidate using one temporary instance before provisioning the two-worker fleet. No long-lived workers until `/dev/kvm` is usable and the exact guest completes a boot/stop cycle.
-- Status: **blocked / not runtime-verified**. Region/type and software candidates are selected, but no AWS instance has been launched and no host or guest evidence exists.
-- Acceptance: the candidate instance exposes usable KVM and the pinned guest boots, reports running, stops, and reports stopped/exited; otherwise record a fallback decision and test that path.
+- [ ] Before two-worker rollout, validate the selected candidate using one temporary instance. Do not provision the long-lived worker pair until `/dev/kvm` is usable and the exact guest completes a boot/stop cycle.
+- Status: **platform support confirmed; instance-level smoke test pending**. No AWS instance has been launched and no host or guest evidence exists.
+- Acceptance: AWS platform support is documented, and before deployment the candidate instance exposes usable KVM and the pinned guest boots, reports running, stops, and reports stopped/exited; otherwise record a fallback decision and test that path.
 - Depends on: T-00.
 
 ### T-02 — Lock MVP decisions
@@ -38,7 +39,7 @@ The user selected AWS EC2 as the worker environment and asked to resolve T-01/T-
 - [x] Document provisional vCPU/memory limits, safety reserve, image alias, and prototype auth approach: `config.example.json` sets max 8 vCPUs, max 8192 MiB, 1024 MiB reserve, and human-readable image alias `ubuntu-demo`; worker and operator bearer-token secrets are environment-configured. These defaults are provisional pending host evidence; final allowlist identity must be immutable (SHA-256).
 - [ ] Complete T-02 evidence closure: record verified Cloud Hypervisor v54.0 binary SHA-256, guest disk SHA-256 from the signed official checksum list, confirm actual worker kernel/available resources, and update the allowlist so `ubuntu-demo` resolves to the immutable image digest. Revisit resource limits after the smoke test.
 - Acceptance: all MVP choices that affect API/image identity and host feasibility are pinned, documented, and validated on the candidate environment; no critical implementation blocker remains.
-- Status: **incomplete**. Candidate decisions are selected, but T-01 runtime feasibility and artifact checksum/boot evidence remain unresolved. Do not advance T-07.
+- Status: **implementation decisions selected; deployment evidence pending**. The adapter can target the pinned API release now. Runtime artifact checksums, guest boot, and immutable image allowlisting remain required before two-worker rollout.
 - Depends on: T-00, T-01.
 
 ## Phase 1 — Foundation
@@ -82,14 +83,18 @@ The user selected AWS EC2 as the worker environment and asked to resolve T-01/T-
 - Depends on: T-03, T-04.
 
 ### T-07 — Implement local Cloud Hypervisor adapter
-- Implementation was started prematurely before its T-01/T-02 dependencies were resolved. Existing code is retained, but **no further T-07 work should proceed until the feasibility and version/image decisions are resolved**.
-- Test failure reported by user: `TestLifecycleEndpointsUseExpectedMethodsAndPaths` could not bind the Unix socket because macOS's temporary directory path exceeded the platform's Unix-socket path limit. A fix now creates the test socket under `/tmp` with a short path; it has **not yet been rerun by the user**.
-- [ ] Verify API endpoints and Unix-socket behavior against a selected, pinned Cloud Hypervisor release.
-- [x] Implement typed calls for VM prepare/create, start, stop, and status (implementation exists; tests currently not yet passing on the reported run).
-- [x] Add bounded timeouts and structured errors (implementation exists; tests currently not yet passing on the reported run).
-- Acceptance: adapter tests pass against a fake API and actual host smoke test succeeds.
-- Status: **blocked by T-01/T-02 and adapter test verification**. No host runtime evidence exists.
-- Depends on: T-01, T-02, T-03.
+- Scope re-confirmed by user: use AWS's official nested-virtualization documentation as platform-support evidence and proceed with adapter implementation against the selected Cloud Hypervisor v54.0 API contract. Keep instance boot/stop proof as a mandatory deployment gate.
+- Versioned API source and adapter contract documented in [Cloud Hypervisor v54.0 API contract](./cloudhypervisor-api-v54.md): `vm.create`, `vm.boot`, `vm.shutdown`, `vm.info`, and `vmm.ping` method/path/status choices checked against the v54.0 OpenAPI specification.
+- Fixed the macOS Unix-socket path-length issue in the fake-socket tests by creating a short socket path under `/tmp`. The test suite has not yet been run after this fix in the current environment.
+- [x] Verify endpoint methods, paths, and success statuses against the pinned v54.0 OpenAPI specification.
+- [x] Implement typed calls for VM prepare/create, start, stop, and status.
+- [x] Add bounded timeouts and structured errors.
+- [x] Align memory size to v54.0 schema (integer bytes), reject non-positive configured memory, and accept all documented VM states including `BreakPoint`.
+- [ ] Run `gofmt` and `go test ./...`; confirm fake Unix-socket tests pass after the short-path fix.
+- [ ] Run a real Cloud Hypervisor v54.0 smoke test on an AWS candidate host before deployment acceptance.
+- Acceptance: adapter tests pass against the fake API; host smoke test is recorded before two-worker rollout.
+- Status: **in progress**. API contract checked and implementation updated; local tests could not be executed from this environment, and AWS host runtime evidence remains pending.
+- Depends on: T-01 platform support decision, T-02 selected API/image candidates, T-03.
 
 ### T-08 — Implement worker VM lifecycle and process ownership
 - [ ] Accept authenticated, validated commands with operation and VM IDs.

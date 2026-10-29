@@ -120,6 +120,22 @@ func TestStatusRejectsMalformedOrUnknownState(t *testing.T) {
 	}
 }
 
+func TestStatusAcceptsDocumentedBreakPointState(t *testing.T) {
+	client, err := NewClientWithHTTPClient(&http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("{\\"state\\":\\"BreakPoint\\"}"))}, nil
+	})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := client.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v, want documented BreakPoint state accepted", err)
+	}
+	if status.State != StatusBreakPoint {
+		t.Fatalf("state = %q, want %q", status.State, StatusBreakPoint)
+	}
+}
+
 func TestRequestTimeoutIsStructured(t *testing.T) {
 	client, err := NewClientWithHTTPClient(&http.Client{Timeout: 10 * time.Millisecond, Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		<-req.Context().Done()

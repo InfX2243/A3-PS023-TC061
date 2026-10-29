@@ -70,7 +70,8 @@ type CPUConfig struct {
 }
 
 type MemoryConfig struct {
-	Size string `json:"size"`
+	// Size is the guest RAM size in bytes, as required by Cloud Hypervisor v54.0.
+	Size int64 `json:"size"`
 }
 
 type PayloadConfig struct {
@@ -94,7 +95,7 @@ type RNGConfig struct {
 // Image allowlisting and fixed path resolution belong in the worker layer.
 type VMConfig struct {
 	CPUs    CPUConfig      `json:"cpus"`
-	Memory  MemoryConfig   `json:"memory,omitempty"`
+	Memory  *MemoryConfig  `json:"memory,omitempty"`
 	Payload PayloadConfig  `json:"payload"`
 	Disks   []DiskConfig   `json:"disks,omitempty"`
 	RNG     *RNGConfig     `json:"rng,omitempty"`
@@ -107,6 +108,7 @@ const (
 	StatusRunning  VMStatus = "Running"
 	StatusShutdown VMStatus = "Shutdown"
 	StatusPaused   VMStatus = "Paused"
+	StatusBreakPoint VMStatus = "BreakPoint"
 )
 
 type StatusResponse struct {
@@ -120,6 +122,9 @@ func (c *Client) Prepare(ctx context.Context, config VMConfig) error {
 func (c *Client) Create(ctx context.Context, config VMConfig) error {
 	if config.CPUs.BootVCPUs < 1 || config.CPUs.MaxVCPUs < config.CPUs.BootVCPUs {
 		return fmt.Errorf("%w: boot_vcpus must be positive and max_vcpus must be >= boot_vcpus", ErrInvalidConfig)
+	}
+	if config.Memory != nil && config.Memory.Size <= 0 {
+		return fmt.Errorf("%w: memory.size must be positive bytes", ErrInvalidConfig)
 	}
 	if strings.TrimSpace(config.Payload.Kernel) == "" && strings.TrimSpace(config.Payload.Firmware) == "" {
 		return fmt.Errorf("%w: payload.kernel or payload.firmware is required", ErrInvalidConfig)
@@ -145,7 +150,7 @@ func (c *Client) Status(ctx context.Context) (StatusResponse, error) {
 		return StatusResponse{}, err
 	}
 	switch result.State {
-	case StatusCreated, StatusRunning, StatusShutdown, StatusPaused:
+	case StatusCreated, StatusRunning, StatusShutdown, StatusPaused, StatusBreakPoint:
 		return result, nil
 	default:
 		return StatusResponse{}, &APIError{Operation: "status", Code: "invalid_response", Message: "response contains an unknown VM state"}

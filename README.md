@@ -40,4 +40,7 @@ These are reserved for subsequent authenticated API/worker tasks and are not yet
 
 ## Current verification status
 
-The GitHub-connected editing environment cannot execute Go commands or access a KVM worker. The code and tests have been added, but build/test results have not been run in this environment. Run `go test ./...` from a clean checkout before treating the foundation as verified.
+- The user reported that `go test ./...` passed for the controller, config, domain, store, and workerhealth packages, and verified `GET /healthz` returns HTTP 200 with `{"status":"ok"}`.
+- The subsequent Cloud Hypervisor adapter test run failed because the Unix-socket test path under macOS's `t.TempDir()` was too long. The test now creates its socket in a short `/tmp` path; this fix still needs a fresh local `go test ./...` run.
+- KVM/Cloud Hypervisor host feasibility, the pinned Cloud Hypervisor release, and the guest image remain unverified. Do not treat a passing unit suite as evidence that a real VM can boot.
+- See [the task plan](docs/tasks.md) for per-task status and evidence. T-01 and T-02 remain gates before additional T-07 work.

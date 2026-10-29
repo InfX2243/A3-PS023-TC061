@@ -89,3 +89,24 @@ func TestNoSecretMeansClosed(t *testing.T) {
 		t.Fatalf("status = %d, want unauthorized", res.Code)
 	}
 }
+
+func TestExplicitUnreachableStatusPersistsUntilHeartbeat(t *testing.T) {
+	registry := NewRegistry(time.Minute)
+	if _, err := registry.Heartbeat(Heartbeat{WorkerID: "w", Hostname: "host", AvailableMemoryBytes: 10, ConfiguredMemoryCapBytes: 100, CloudHypervisorHealthy: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !registry.MarkUnreachable("w") {
+		t.Fatal("expected existing worker to be marked unreachable")
+	}
+	report, ok := registry.Get("w")
+	if !ok || report.Status != StatusUnreachable {
+		t.Fatalf("report = %#v, found=%v; want unreachable", report, ok)
+	}
+	if _, err := registry.Heartbeat(Heartbeat{WorkerID: "w", Hostname: "host", AvailableMemoryBytes: 10, ConfiguredMemoryCapBytes: 100, CloudHypervisorHealthy: true}); err != nil {
+		t.Fatal(err)
+	}
+	report, _ = registry.Get("w")
+	if report.Status != StatusHealthy {
+		t.Fatalf("status after valid heartbeat = %q, want healthy", report.Status)
+	}
+}

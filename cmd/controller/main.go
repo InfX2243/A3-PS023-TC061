@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/InfX2243/A3-PS023-TC061/internal/config"
+	"github.com/InfX2243/A3-PS023-TC061/internal/workerhealth"
 )
 
 func main() {
@@ -32,6 +33,9 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("{\"status\":\"ok\"}\n"))
 	})
+
+	workers := workerhealth.NewRegistry(workerhealth.DefaultStaleAfter)
+	workerhealth.NewHandler(workers, cfg.WorkerSharedSecret, cfg.OperatorToken).Register(mux)
 
 	server := &http.Server{
 		Addr:              cfg.ListenAddr,

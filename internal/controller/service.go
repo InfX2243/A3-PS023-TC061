@@ -26,6 +26,7 @@ type Service struct {
 
 func NewService(ctx context.Context, st *store.Store, cfg config.Config) (*Service, error) {
 	if st == nil { return nil, errors.New("controller store must not be nil") }
+	if len(cfg.Workers) > 0 && cfg.WorkerSharedSecret == "" { return nil, errors.New("VM_CONTROLLER_WORKER_SHARED_SECRET is required when workers are configured") }
 	s := &Service{store: st, cfg: cfg, workers: newWorkerClient(cfg.WorkerSharedSecret, 5*time.Second), now: time.Now}
 	if err := s.ensureConfiguredWorkers(ctx); err != nil { return nil, err }
 	return s, nil

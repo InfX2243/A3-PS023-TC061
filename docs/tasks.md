@@ -169,7 +169,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 
 ### T-16 — Add VM provisioning form and VM list
 - [x] CI passed UI create/idempotency tests and API image allowlist/validation tests.
-- [ ] Verify the selected worker, resource values, observed state, and latest operation are visible.
+- [x] UI dashboard tests assert VM name, worker placement, approved image, observed state, and latest operation are visible.
 - Implementation present: the UI includes name, vCPU, memory, and approved image fields; form submissions carry a stable idempotency key; the dashboard shows VM ID/name/host/resources/state and latest operation.
 - Acceptance: operator can create a VM from the browser and observe operation progress.
 - Status: **provisioning form/list implemented; verification pending**.
@@ -177,7 +177,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 
 ### T-17 — Add start/stop/status UI actions
 - [x] CI passed UI start-action/CSRF tests and verifies unknown operations trigger dashboard refresh without exposing start/stop actions.
-- [ ] Verify invalid actions are not shown and pending/unknown operations refresh without being presented as success.
+- [x] UI tests verify invalid actions are hidden for unknown state and the dashboard refreshes while the operation remains uncertain.
 - Implementation present: start/stop controls are shown for compatible observed states, action results return to the dashboard, and the dashboard refreshes while operations remain pending/dispatched/unknown.
 - Acceptance: complete create/start/stop/list journey is usable without manual API calls.
 - Status: **lifecycle UI implemented; verification pending**.
@@ -201,8 +201,8 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-01, T-14, T-18.
 
 ### T-20 — Run end-to-end and fault tests
-- [ ] Run `gofmt`, `go test ./...`, `go vet ./...`, and build both binaries locally or through CI.
-- [ ] Run simulated two-worker placement/lifecycle tests and all fault cases.
+- [x] CI ran formatting, `go test ./...`, `go vet ./...`, and built both binaries successfully.
+- [x] CI passed simulated two-worker placement/lifecycle, idempotency, timeout, reconciliation, and UI security tests.
 - [ ] Run real KVM-backed create/start/stop on each validated host and capture evidence.
 - Implementation present: Go CI workflow runs formatting, tests, vet, and builds; controller service tests cover idempotency, timeout uncertainty, and reconciliation; a two-simulated-worker API journey is in `internal/controller/e2e_test.go`.
 - Acceptance: all required scenarios pass or have a clearly documented blocker with no false success claims.

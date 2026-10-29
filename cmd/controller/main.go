@@ -69,6 +69,7 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go reconciliationLoop(ctx, service)
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("controller starting", "listen_addr", cfg.ListenAddr)
@@ -88,6 +89,25 @@ func main() {
 		if err != nil && err != http.ErrServerClosed {
 			slog.Error("controller server failed", "error", err)
 			os.Exit(1)
+		}
+	}
+}
+
+func reconciliationLoop(ctx context.Context, service *controller.Service) {
+	run := func() {
+		reconcileCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		if err := service.Reconcile(reconcileCtx); err != nil {
+			slog.Warn("one or more operations remain unresolved after reconciliation", "error", err)
+		}
+	}
+	run()
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done(): return
+		case <-ticker.C: run()
 		}
 	}
 }

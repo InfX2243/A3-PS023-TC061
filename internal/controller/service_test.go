@@ -53,8 +53,12 @@ func fakeWorker(t *testing.T, delay time.Duration) (*httptest.Server, *atomic.In
 		state := "Running"
 		if r.Method == http.MethodGet { state = "Created" }
 		if strings.HasSuffix(r.URL.Path, "/stop") { state = "Shutdown" }
+		vmID := strings.TrimPrefix(r.URL.Path, "/api/v1/worker/vms/")
+		vmID = strings.TrimSuffix(strings.TrimSuffix(vmID, "/start"), "/stop")
+		var operation struct { OperationID string `json:"operation_id"` }
+		if r.Method == http.MethodPost { _ = json.NewDecoder(r.Body).Decode(&operation) }
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"worker_id":"worker-a","vm_id":"vm-test","operation_id":"op-test","state":state})
+		_ = json.NewEncoder(w).Encode(map[string]any{"worker_id":"worker-a","vm_id":vmID,"operation_id":operation.OperationID,"state":state})
 	}))
 	return server, &creates
 }

@@ -87,9 +87,16 @@ func PlaceAndReserve(ctx context.Context, tx *sql.Tx, vmID string, memoryBytes u
 	}
 	if best == nil { return "", ErrNoCapacity }
 
-	if _, err := tx.ExecContext(ctx, `INSERT INTO reservations(vm_id, worker_id, memory_bytes, state, created_at, updated_at)
-		VALUES (?, ?, ?, 'pending', ?, ?)`, vmID, best.id, int64(memoryBytes), now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
-		return "", fmt.Errorf("reserve memory for VM %q: %w", vmID, err)
+	result, err := tx.ExecContext(ctx, `INSERT INTO reservations(vm_id, worker_id, memory_bytes, state, created_at, updated_at)
+		VALUES (?, ?, ?, 'pending', ?, ?)
+		ON CONFLICT(vm_id) DO UPDATE SET worker_id = excluded.worker_id,
+			memory_bytes = excluded.memory_bytes, state = 'pending', updated_at = excluded.updated_at
+		WHERE reservations.state = 'released'`, vmID, best.id, int64(memoryBytes), now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
+	if err != nil { return "", fmt.Errorf("reserve memory for VM %q: %w", vmID, err) }
+	if affected, err := result.RowsAffected(); err != nil {
+		return "", fmt.Errorf("check reservation update: %w", err)
+	} else if affected == 0 {
+		return "", fmt.Errorf("VM %q already has a pending or active reservation", vmID)
 	}
 	if _, err := tx.ExecContext(ctx, "UPDATE vms SET worker_id = ?, updated_at = ? WHERE id = ?", best.id, now.Format(time.RFC3339Nano), vmID); err != nil {
 		return "", fmt.Errorf("assign VM to selected worker: %w", err)

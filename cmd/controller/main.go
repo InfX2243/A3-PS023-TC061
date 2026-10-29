@@ -15,6 +15,7 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
 	"github.com/InfX2243/A3-PS023-TC061/internal/store"
 	"github.com/InfX2243/A3-PS023-TC061/internal/workerhealth"
+	"github.com/InfX2243/A3-PS023-TC061/internal/webui"
 )
 
 func main() {
@@ -56,6 +57,11 @@ func main() {
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: allowedImages,
 	}).Register(mux)
+	webui.NewHandler(service, cfg.OperatorToken, webui.Limits{
+		MaxVCPUs: cfg.MaxVCPUs,
+		MaxMemoryMiB: cfg.MaxMemoryMiB,
+		AllowedImages: cfg.AllowedImages,
+	}, false).Register(mux)
 	registry := workerhealth.NewRegistry(workerhealth.DefaultStaleAfter)
 	workerhealth.NewHandlerWithRecorder(registry, cfg.WorkerSharedSecret, cfg.OperatorToken, service).RegisterHeartbeatOnly(mux)
 

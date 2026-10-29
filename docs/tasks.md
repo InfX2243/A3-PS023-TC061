@@ -59,6 +59,8 @@ The user explicitly authorized continuing without waiting for environment verifi
 - Depends on: T-03.
 
 ### T-05 — Add SQLite persistence and migrations
+- Implementation started: `internal/store/sqlite.go` adds SQLite open/close, WAL and foreign-key setup, transactional schema migration version 1, tables for workers/VMs/operations/reservations, uniqueness for idempotency keys, indexes, and transaction helper. `internal/store/sqlite_test.go` covers migration/restart persistence, uniqueness, rollback, and serialized concurrent transactions.
+- Verification pending: the GitHub-connected environment cannot run Go tests or resolve/check the dependency lockfile. T-05 remains unchecked until `go test ./...` passes in a Go-enabled checkout.
 - [ ] Add tables and unique constraints for VMs, workers, operations, and reservations.
 - [ ] Add migration/versioning strategy and transaction helpers.
 - [ ] Test restart persistence and concurrent reservation transaction behavior.

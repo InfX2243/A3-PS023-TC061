@@ -32,59 +32,61 @@ The user explicitly authorized continuing without waiting for environment verifi
 - Depends on: T-00.
 
 ### T-02 — Lock MVP decisions
-- [ ] Confirm language/toolchain and minimal UI approach from repository state.
-- [ ] Pin Cloud Hypervisor and guest image versions.
-- [ ] Set vCPU/memory limits, safety reserve, allowed image IDs, and worker communication/auth approach.
+- [x] Confirm language/toolchain and minimal UI approach from repository state: Go 1.23+; UI will be served by the controller using server-rendered HTML or a small embedded frontend (documented in `docs/design.md`).
+- [ ] Pin Cloud Hypervisor and guest image versions. This is blocked on T-01 selecting and testing the worker environment; no release/image has been verified.
+- [x] Document provisional vCPU/memory limits, safety reserve, allowed image IDs, and prototype auth approach: `config.example.json` sets max 8 vCPUs, max 8192 MiB, 1024 MiB reserve, image ID `ubuntu-demo`; worker and operator bearer-token secrets are environment-configured. These are prototype defaults, not host-validated final limits.
 - Acceptance: configuration defaults and decisions are documented; no critical unknown blocks implementation.
+- Status: **incomplete** because T-01 feasibility and pinned Cloud Hypervisor/guest-image versions remain unresolved. Do not advance to dependent implementation tasks until resolved or explicitly re-scoped with the user.
 - Depends on: T-00, T-01.
 
 ## Phase 1 — Foundation
 
 ### T-03 — Establish project layout and configuration
-- Implementation started: Go module, JSON configuration with validation, example non-secret config, secret/runtime ignore rules, JSON structured logging, graceful HTTP shutdown, `/healthz`, and configuration validation tests are present. See the `T-03` commits on this branch and [README development setup](../README.md).
-- Verification pending: Go commands could not be run from the GitHub-connected editing environment. Do not mark T-03 complete until `go test ./...` and a local `/healthz` smoke test pass.
-- [ ] Add config loading, validation, logging, and graceful startup/shutdown.
-- [ ] Add example non-secret configuration and ignore real secrets.
-- [ ] Add `/healthz` and startup validation.
+- Evidence: user-reported local `go test ./...` passed for controller, config, domain, store, and workerhealth packages before the T-07 test was added. User also verified that the controller starts with `config.example.json` and `GET /healthz` returns HTTP 200 with `{"status":"ok"}`. Configuration validation is covered by passing config tests.
+- [x] Add config loading, validation, logging, and graceful startup/shutdown.
+- [x] Add example non-secret configuration and ignore real secrets.
+- [x] Add `/healthz` and startup validation.
 - Acceptance: service starts with valid config, fails clearly with invalid config, and health check passes.
+- Status: **complete for the current foundation** based on user-provided test and smoke-test evidence.
 - Depends on: T-02.
 
 ### T-04 — Define domain models and state transitions
-- Implementation started: `internal/domain/models.go` defines VM, worker, reservation, and operation models plus guarded VM/operation state transitions. `internal/domain/models_test.go` covers allowed/denied transitions and nil inputs.
-- Verification pending: the GitHub-connected editing environment cannot execute `go test ./...`; keep T-04 unchecked until tests run successfully.
-- [ ] Define VM, worker, reservation, and operation models.
-- [ ] Encode allowed lifecycle transitions.
-- [ ] Add unit tests for valid and invalid transitions.
+- Evidence: user-reported local `go test ./...` passed `internal/domain` tests.
+- [x] Define VM, worker, reservation, and operation models.
+- [x] Encode allowed lifecycle transitions.
+- [x] Add unit tests for valid and invalid transitions.
 - Acceptance: state transition tests pass and invalid transitions return explicit errors.
+- Status: **complete** based on the reported passing test suite.
 - Depends on: T-03.
 
 ### T-05 — Add SQLite persistence and migrations
-- Implementation started: `internal/store/sqlite.go` adds SQLite open/close, WAL and foreign-key setup, transactional schema migration version 1, tables for workers/VMs/operations/reservations, uniqueness for idempotency keys, indexes, and transaction helper. `internal/store/sqlite_test.go` covers migration/restart persistence, uniqueness, rollback, and serialized concurrent transactions.
-- Verification pending: the GitHub-connected environment cannot run Go tests or resolve/check the dependency lockfile. T-05 remains unchecked until `go test ./...` passes in a Go-enabled checkout.
-- [ ] Add tables and unique constraints for VMs, workers, operations, and reservations.
-- [ ] Add migration/versioning strategy and transaction helpers.
-- [ ] Test restart persistence and concurrent reservation transaction behavior.
+- Evidence: user-reported local `go test ./...` passed `internal/store` tests, covering migration/restart persistence, uniqueness, rollback, and serialized concurrent transactions.
+- [x] Add tables and unique constraints for VMs, workers, operations, and reservations.
+- [x] Add migration/versioning strategy and transaction helpers.
+- [x] Test restart persistence and concurrent reservation transaction behavior.
 - Acceptance: tests show records survive restart and constraints prevent duplicate idempotency keys.
+- Status: **complete for the current schema and store tests**. The controller does not yet use this store at runtime; integration is a later task.
 - Depends on: T-04.
 
 ## Phase 2 — Worker vertical slice
 
 ### T-06 — Implement worker health and inventory
-- Implementation started: `internal/workerhealth/registry.go` tracks worker heartbeats, hostname, available memory, configured memory cap, Cloud Hypervisor health, and healthy/stale/unreachable states (default stale threshold: 30 seconds). `MarkUnreachable` supports explicit failed probes; a subsequent valid heartbeat restores reported health. `internal/workerhealth/http.go` exposes authenticated `POST /api/v1/worker/heartbeat` and `GET /api/v1/workers`; no secret means access is closed. Controller registers the endpoints. Tests cover stale classification, VMM health, invalid capacity, authentication, and unreachable recovery.
-- Verification pending: tests cannot be executed in the GitHub-connected environment. The current registry is in-memory and needs persistent worker storage/integration in a later step; no real worker agent or probe loop has been deployed yet. Keep T-06 unchecked until tests and integration checks pass.
-- [ ] Report worker ID, heartbeat, available memory, configured cap, and Cloud Hypervisor health.
-- [ ] Add worker authentication.
-- [ ] Mark stale heartbeat as unavailable using a documented threshold.
+- Evidence: user-reported local `go test ./...` passed `internal/workerhealth` tests. This verifies the in-memory registry and authenticated HTTP handler; it does not verify a deployed worker agent, probe loop, or persistent worker inventory.
+- [x] Report worker ID, heartbeat, available memory, configured cap, and Cloud Hypervisor health.
+- [x] Add worker authentication.
+- [x] Mark stale heartbeat as unavailable using a documented threshold (30 seconds).
 - Acceptance: controller can distinguish healthy, stale, and unreachable workers.
+- Status: **complete for the registry/HTTP-handler scope**. Persistent integration and a real worker agent remain future work.
 - Depends on: T-03, T-04.
 
 ### T-07 — Implement local Cloud Hypervisor adapter
-- Implementation started in commits [a38da7f](https://github.com/InfX2243/A3-PS023-TC061/commit/a38da7f9e27648beace581519844e9914aa9d501) and [98209ed](https://github.com/InfX2243/A3-PS023-TC061/commit/98209ed937be65a13f7ff1e9eef2361a39a7749e): `internal/cloudhypervisor/client.go` provides a Unix-socket HTTP client, typed VM configuration/status, prepare/create/start/stop/status/ping calls, bounded request timeouts, response-size limits, and structured errors. Fake socket/client tests cover endpoint/method mapping, invalid configuration, HTTP failures, malformed/unknown status responses, and timeouts.
-- Verification pending: the user reported the pre-T-07 `go test ./...` suite passing, but the new adapter tests have not yet been run. No pinned Cloud Hypervisor version or host runtime evidence is available, so the real-host smoke test remains pending. Do not mark T-07 complete until adapter tests pass and the host test is performed or explicitly split/deferred.
-- [ ] Verify pinned API endpoints and local Unix socket behavior against the selected Cloud Hypervisor release.
-- [ ] Implement typed calls for VM prepare/create, start, stop, and status.
-- [ ] Use bounded timeouts and structured errors.
+- Implementation was started prematurely before its T-01/T-02 dependencies were resolved. Existing code is retained, but **no further T-07 work should proceed until the feasibility and version/image decisions are resolved**.
+- Test failure reported by user: `TestLifecycleEndpointsUseExpectedMethodsAndPaths` could not bind the Unix socket because macOS's temporary directory path exceeded the platform's Unix-socket path limit. A fix now creates the test socket under `/tmp` with a short path; it has **not yet been rerun by the user**.
+- [ ] Verify API endpoints and Unix-socket behavior against a selected, pinned Cloud Hypervisor release.
+- [x] Implement typed calls for VM prepare/create, start, stop, and status (implementation exists; tests currently not yet passing on the reported run).
+- [x] Add bounded timeouts and structured errors (implementation exists; tests currently not yet passing on the reported run).
 - Acceptance: adapter tests pass against a fake API and actual host smoke test succeeds.
+- Status: **blocked by T-01/T-02 and adapter test verification**. No host runtime evidence exists.
 - Depends on: T-01, T-02, T-03.
 
 ### T-08 — Implement worker VM lifecycle and process ownership

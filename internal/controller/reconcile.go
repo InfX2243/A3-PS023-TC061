@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
 )
 
@@ -111,4 +110,3 @@ func reconcileDecision(typ domain.OperationType, observed domain.VMState) (domai
 	return domain.OperationUnknown, "", domain.VMUnknown, ""
 }
 
-var _ = controllerapi.ErrNotFound

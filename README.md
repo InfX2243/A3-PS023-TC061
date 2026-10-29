@@ -26,7 +26,7 @@ See [controller deployment and worker onboarding](deploy/README.md) for the EC2 
 
 The controller now supports a persistent worker registry in the console at `/workers`. Registrations are stored in SQLite and survive controller restarts. Removing a registration removes controller metadata only; it does not terminate cloud infrastructure. Agent health (healthy, stale, unreachable) is distinct from authoritative cloud lifecycle state. AWS EC2 lifecycle status and start/stop/terminate actions require a separately configured AWS integration and least-privilege IAM permissions; they must not be inferred from heartbeat loss.
 
-Copy `.env.example` to a local `.env`, replace both secret placeholders with different random values, and run `chmod 600 .env`. The controller loads a local `.env` without shell evaluation and does not override environment variables already set by the process. Never commit `.env` or real credentials. Production deployments should supply secrets through the service manager's protected environment file or a secret manager.
+Copy `.env.example` to a local `.env`, replace the operator token, operator password, and worker shared secret with independent values, set an operator username, and run `chmod 600 .env`. The browser UI supports username/password sign-in; the operator token remains the API bearer secret and session-signing key. The controller loads a local `.env` without shell evaluation and does not override environment variables already set by the process. Never commit `.env` or real credentials. Production deployments should supply secrets through the service manager's protected environment file or a secret manager.
 
 ## Development setup
 

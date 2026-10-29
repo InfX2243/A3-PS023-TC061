@@ -118,6 +118,9 @@ func loadConfig(path string) (fileConfig, error) {
 	f, err := os.Open(path)
 	if err != nil { return fileConfig{}, fmt.Errorf("open worker config: %w", err) }
 	defer f.Close()
+	info, err := f.Stat()
+	if err != nil { return fileConfig{}, fmt.Errorf("stat worker config: %w", err) }
+	if info.Mode().Perm()&0022 != 0 { return fileConfig{}, errors.New("worker config file must not be group- or world-writable") }
 	dec := json.NewDecoder(f)
 	dec.DisallowUnknownFields()
 	var cfg fileConfig

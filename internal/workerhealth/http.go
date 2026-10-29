@@ -1,25 +1,37 @@
 package workerhealth
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strings"
 )
 
+type HeartbeatRecorder interface { RecordWorkerHeartbeat(context.Context, Heartbeat) error }
+
 type Handler struct {
-	registry    *Registry
+	registry *Registry
 	workerSecret string
 	operatorToken string
+	recorder HeartbeatRecorder
 }
 
 func NewHandler(registry *Registry, workerSecret, operatorToken string) *Handler {
 	return &Handler{registry: registry, workerSecret: workerSecret, operatorToken: operatorToken}
 }
 
+func NewHandlerWithRecorder(registry *Registry, workerSecret, operatorToken string, recorder HeartbeatRecorder) *Handler {
+	return &Handler{registry: registry, workerSecret: workerSecret, operatorToken: operatorToken, recorder: recorder}
+}
+
 func (h *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/worker/heartbeat", h.heartbeat)
+	h.RegisterHeartbeatOnly(mux)
 	mux.HandleFunc("GET /api/v1/workers", h.list)
+}
+
+func (h *Handler) RegisterHeartbeatOnly(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/v1/worker/heartbeat", h.heartbeat)
 }
 
 func bearerToken(r *http.Request) string {
@@ -64,6 +76,12 @@ func (h *Handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
+	}
+	if h.recorder != nil {
+		if err := h.recorder.RecordWorkerHeartbeat(r.Context(), hb); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "worker heartbeat could not be persisted"})
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, report)
 }

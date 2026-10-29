@@ -25,7 +25,7 @@ const docsPageTemplate = `
 .docs-brand{display:flex;align-items:center;gap:11px;color:#20283a;text-decoration:none}
 .docs-brand .brand-mark{background:#252f56;color:#fff}
 .docs-brand-name{font-size:14px;font-weight:800;letter-spacing:-.3px}
-.docs-brand-sub{font-size:10px;color:#818ba0;margin-top:2px}
+.docs-brand-sub{font-size:10px;color:#536078;margin-top:2px}
 .docs-top-links{display:flex;align-items:center;gap:10px}
 .docs-top-links a{font-size:12px;text-decoration:none;color:#536078;font-weight:650}
 .docs-top-links a:hover{color:#5556d5}
@@ -38,7 +38,7 @@ const docsPageTemplate = `
 .docs-chip{border:1px solid #ffffff2b;border-radius:7px;padding:7px 10px;color:#e0e5f8;font-size:10px}
 .docs-layout{max-width:1320px;margin:0 auto;padding:32px 24px 70px;display:grid;grid-template-columns:220px minmax(0,780px) 180px;gap:36px;align-items:start}
 .docs-sidebar{position:sticky;top:94px;max-height:calc(100vh - 120px);overflow:auto;padding:5px 0 20px}
-.docs-nav-label{font-size:9px;text-transform:uppercase;letter-spacing:1.4px;font-weight:800;color:#939caf;margin:15px 0 8px}
+.docs-nav-label{font-size:9px;text-transform:uppercase;letter-spacing:1.4px;font-weight:800;color:#58647a;margin:15px 0 8px}
 .docs-nav{display:grid;gap:3px}
 .docs-nav a{font-size:11px;color:#657087;text-decoration:none;padding:8px 10px;border-radius:7px;line-height:1.35}
 .docs-nav a:hover{background:#eceeff;color:#4e50c5}
@@ -62,7 +62,7 @@ const docsPageTemplate = `
 .docs-card a:hover{text-decoration:underline}
 .docs-table-wrap{overflow-x:auto;border:1px solid #e4e8f0;border-radius:9px;background:#fff;margin:13px 0}
 .docs-table{border-collapse:collapse;width:100%;font-size:11px;white-space:normal}
-.docs-table th{text-align:left;background:#f9faff;color:#737e93;font-size:9px;letter-spacing:.7px;text-transform:uppercase;padding:10px 12px}
+.docs-table th{text-align:left;background:#f9faff;color:#58647a;font-size:9px;letter-spacing:.7px;text-transform:uppercase;padding:10px 12px}
 .docs-table td{padding:11px 12px;border-top:1px solid #edf0f5;line-height:1.65;color:#58647a;vertical-align:top}
 .docs-table td:first-child{font-weight:750;color:#303b51;white-space:nowrap}
 .docs-code{position:relative;background:#151d31;color:#e2e8f8;border-radius:9px;padding:15px 16px;margin:12px 0;overflow-x:auto}
@@ -70,11 +70,11 @@ const docsPageTemplate = `
 .docs-inline-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;background:#eceef5;color:#3e4960;padding:2px 4px;border-radius:4px}
 .docs-aside{position:sticky;top:94px}
 .docs-aside-card{background:#fff;border:1px solid #e3e7f0;border-radius:10px;padding:14px}
-.docs-aside-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8b94a6;font-weight:800;margin-bottom:11px}
+.docs-aside-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#58647a;font-weight:800;margin-bottom:11px}
 .docs-aside a{display:block;font-size:10px;line-height:1.5;color:#5d6880;text-decoration:none;margin:10px 0}
 .docs-aside a:hover{color:#5355cb}
 .docs-aside .docs-aside-cta{border-top:1px solid #edf0f5;padding-top:12px;margin-top:13px;color:#5355cb;font-weight:800}
-.docs-footer{max-width:1320px;margin:0 auto;padding:20px 24px 28px;border-top:1px solid #e4e8f0;display:flex;justify-content:space-between;gap:12px;color:#8b94a6;font-size:10px}
+.docs-footer{max-width:1320px;margin:0 auto;padding:20px 24px 28px;border-top:1px solid #e4e8f0;display:flex;justify-content:space-between;gap:12px;color:#58647a;font-size:10px}
 .docs-footer a{color:#5b5dd2;text-decoration:none}
 @media(max-width:1050px){.docs-layout{grid-template-columns:190px minmax(0,1fr);gap:25px}.docs-aside{display:none}}
 @media(max-width:680px){.docs-topbar{height:60px;padding:0 16px}.docs-top-links .docs-top-secondary{display:none}.docs-hero{padding:37px 20px 34px}.docs-layout{display:block;padding:27px 18px 45px}.docs-sidebar{position:static;max-height:none;border:1px solid #e3e7f0;background:#fff;border-radius:10px;padding:12px;margin-bottom:28px}.docs-nav{grid-template-columns:repeat(2,minmax(0,1fr))}.docs-nav-label{margin-top:8px}.docs-grid{grid-template-columns:1fr}.docs-footer{padding:18px;display:block}.docs-footer span{display:block;margin:5px 0}}

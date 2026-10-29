@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -85,14 +86,17 @@ func (p *fakeProcess) Wait() error {
 
 func testManager(t *testing.T) (*Manager, *fakeRuntime) {
 	t.Helper()
+	root := t.TempDir()
+	baseDisk := filepath.Join(root, "ubuntu-base.img")
+	if err := os.WriteFile(baseDisk, []byte("test base image"), 0600); err != nil { t.Fatal(err) }
 	runtime := &fakeRuntime{hv: &fakeHypervisor{}, proc: &fakeProcess{}}
 	manager, err := NewManagerWithRuntime(Config{
 		WorkerID: "worker-a",
-		RuntimeDir: filepath.Join(t.TempDir(), "runtime"),
+		RuntimeDir: filepath.Join(root, "runtime"),
 		CloudHypervisor: "/usr/bin/cloud-hypervisor",
 		MaxVCPUs: 8,
 		MaxMemoryBytes: 8 * 1024 * 1024 * 1024,
-		Images: []Image{{ID: "ubuntu-demo", KernelPath: "/var/lib/vm-images/vmlinuz", DiskPath: "/var/lib/vm-images/ubuntu.img", Cmdline: "console=ttyS0"}},
+		Images: []Image{{ID: "ubuntu-demo", KernelPath: "/var/lib/vm-images/vmlinuz", DiskPath: baseDisk, Cmdline: "console=ttyS0"}},
 		RequestTimeout: time.Second,
 		StartupTimeout: time.Second,
 	}, runtime)
@@ -117,9 +121,14 @@ func TestPrepareUsesConfiguredImageAndIsIdempotent(t *testing.T) {
 	}
 	runtime.hv.mu.Lock()
 	defer runtime.hv.mu.Unlock()
-	if runtime.hv.created.Payload.Kernel != "/var/lib/vm-images/vmlinuz" || len(runtime.hv.created.Disks) != 1 || runtime.hv.created.Disks[0].Path != "/var/lib/vm-images/ubuntu.img" {
-		t.Fatalf("Cloud Hypervisor received non-allowlisted image paths: %#v", runtime.hv.created)
+	if runtime.hv.created.Payload.Kernel != "/var/lib/vm-images/vmlinuz" || len(runtime.hv.created.Disks) != 1 {
+		t.Fatalf("Cloud Hypervisor received unexpected image configuration: %#v", runtime.hv.created)
 	}
+	perVMDisk := runtime.hv.created.Disks[0].Path
+	if perVMDisk == "" || filepath.Base(perVMDisk) != "root.img" { t.Fatalf("disk path %q is not a per-VM disk", perVMDisk) }
+	diskContents, err := os.ReadFile(perVMDisk)
+	if err != nil { t.Fatalf("read staged per-VM disk: %v", err) }
+	if string(diskContents) != "test base image" { t.Fatalf("per-VM disk content = %q", diskContents) }
 }
 
 func TestPrepareRejectsUnapprovedImageAndUnsafeID(t *testing.T) {

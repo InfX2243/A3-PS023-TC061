@@ -61,7 +61,7 @@ func main() {
 		MaxVCPUs: cfg.MaxVCPUs,
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: cfg.AllowedImages,
-	}, false).Register(mux)
+	}, cfg.SecureCookies).Register(mux)
 	registry := workerhealth.NewRegistry(workerhealth.DefaultStaleAfter)
 	workerhealth.NewHandlerWithRecorder(registry, cfg.WorkerSharedSecret, cfg.OperatorToken, service).RegisterHeartbeatOnly(mux)
 

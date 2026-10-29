@@ -40,6 +40,7 @@ func (s *Service) ensureConfiguredWorkers(ctx context.Context) error {
 			_, err := tx.ExecContext(ctx, `INSERT INTO workers(id, name, endpoint, state, last_heartbeat, available_memory_bytes, memory_limit_bytes, created_at, updated_at)
 				VALUES (?, ?, ?, 'unreachable', NULL, 0, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET name=excluded.name, endpoint=excluded.endpoint,
+					state='unreachable', last_heartbeat=NULL, available_memory_bytes=0,
 					memory_limit_bytes=excluded.memory_limit_bytes, updated_at=excluded.updated_at`,
 				worker.ID, worker.Name, strings.TrimRight(worker.Endpoint, "/"), int64(limit), now, now)
 			if err != nil { return fmt.Errorf("register configured worker %q: %w", worker.ID, err) }

@@ -1,6 +1,7 @@
 name: Go verification
 
 on:
+  workflow_dispatch:
   push:
     branches: ["**"]
   pull_request:
@@ -22,6 +23,8 @@ jobs:
         run: gofmt -w $(git ls-files '*.go')
       - name: Check whitespace errors
         run: git diff --check
+      - name: Go version
+        run: go version
       - name: Test
         run: go test ./...
       - name: Vet

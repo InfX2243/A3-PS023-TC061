@@ -13,23 +13,31 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
 )
 
-type fakeUIService struct{}
+type fakeUIService struct { createCalls int; lastKey string; startCalls int; stopCalls int }
 func (*fakeUIService) ListWorkers(context.Context) ([]domain.Worker, error) {
 	return []domain.Worker{{ID:"worker-a", Name:"Worker A", State:domain.WorkerHealthy, AvailableMemoryBytes:2*1024*1024*1024, MemoryLimitBytes:4*1024*1024*1024}}, nil
 }
 func (*fakeUIService) ListVMs(context.Context) ([]domain.VM, error) { return []domain.VM{}, nil }
 func (*fakeUIService) LatestOperation(context.Context, string) (domain.Operation, error) { return domain.Operation{}, controllerapi.ErrNotFound }
-func (*fakeUIService) CreateVM(context.Context, controllerapi.CreateVMRequest, string) (domain.VM, domain.Operation, error) {
+func (s *fakeUIService) CreateVM(_ context.Context, _ controllerapi.CreateVMRequest, key string) (domain.VM, domain.Operation, error) {
+	s.createCalls++
+	s.lastKey = key
 	now := time.Now()
 	return domain.VM{ID:"vm-1", Name:"demo", Observed:domain.VMStopped, CreatedAt:now, UpdatedAt:now}, domain.Operation{ID:"op-1", State:domain.OperationSucceeded}, nil
 }
-func (*fakeUIService) StartVM(context.Context, string) (domain.VM, domain.Operation, error) { return domain.VM{}, domain.Operation{}, nil }
-func (*fakeUIService) StopVM(context.Context, string) (domain.VM, domain.Operation, error) { return domain.VM{}, domain.Operation{}, nil }
+func (s *fakeUIService) StartVM(context.Context, string) (domain.VM, domain.Operation, error) { s.startCalls++; return domain.VM{}, domain.Operation{ID:"op-start", State:domain.OperationSucceeded}, nil }
+func (s *fakeUIService) StopVM(context.Context, string) (domain.VM, domain.Operation, error) { s.stopCalls++; return domain.VM{}, domain.Operation{ID:"op-stop", State:domain.OperationSucceeded}, nil }
 
 func testUI() http.Handler {
+	_, handler := newTestUI()
+	return handler
+}
+
+func newTestUI() (*Handler, http.Handler) {
 	mux := http.NewServeMux()
-	NewHandler(&fakeUIService{}, "operator-secret", Limits{MaxVCPUs:8, MaxMemoryMiB:8192, AllowedImages:[]string{"ubuntu-demo"}}, false).Register(mux)
-	return mux
+	h := NewHandler(&fakeUIService{}, "operator-secret", Limits{MaxVCPUs:8, MaxMemoryMiB:8192, AllowedImages:[]string{"ubuntu-demo"}}, false)
+	h.Register(mux)
+	return h, mux
 }
 
 func TestDashboardRequiresLoginAndSetsSecurityHeaders(t *testing.T) {
@@ -73,4 +81,57 @@ func TestNewVMFormHasStableIdempotencyKey(t *testing.T) {
 	testUI().ServeHTTP(response, request)
 	if response.Code != http.StatusOK { t.Fatalf("status = %d", response.Code) }
 	if !strings.Contains(response.Body.String(), "name=\"idempotency_key\"") { t.Fatal("VM form missing idempotency key") }
+}
+
+func TestCreateFormRequiresCSRFAndPassesStableIdempotencyKey(t *testing.T) {
+	h, handler := newTestUI()
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	cookie := loginResponse.Result().Cookies()[0]
+	values := url.Values{"name":{"demo"}, "vcpus":{"1"}, "memory_mib":{"512"}, "image_id":{"ubuntu-demo"}, "idempotency_key":{"form-key-1"}}
+	withoutCSRF := httptest.NewRequest(http.MethodPost, "/vms", strings.NewReader(values.Encode()))
+	withoutCSRF.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	withoutCSRF.AddCookie(cookie)
+	rejected := httptest.NewRecorder()
+	handler.ServeHTTP(rejected, withoutCSRF)
+	if rejected.Code != http.StatusForbidden { t.Fatalf("missing CSRF status=%d, want 403", rejected.Code) }
+	cookieRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	cookieRequest.AddCookie(cookie)
+	values.Set("csrf_token", h.csrfToken(cookieRequest))
+	request := httptest.NewRequest(http.MethodPost, "/vms", strings.NewReader(values.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusSeeOther { t.Fatalf("valid create status=%d; body=%s", response.Code, response.Body.String()) }
+	service := h.service.(*fakeUIService)
+	if service.createCalls != 1 || service.lastKey != "form-key-1" { t.Fatalf("create calls/key=%d/%q", service.createCalls, service.lastKey) }
+}
+
+func TestLifecycleActionsRequireCSRF(t *testing.T) {
+	h, handler := newTestUI()
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	cookie := loginResponse.Result().Cookies()[0]
+	request := httptest.NewRequest(http.MethodPost, "/vms/vm-1/start", strings.NewReader(""))
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden { t.Fatalf("missing CSRF status=%d, want 403", response.Code) }
+	service := h.service.(*fakeUIService)
+	if service.startCalls != 0 { t.Fatalf("start called %d times without CSRF", service.startCalls) }
+	cookieRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	cookieRequest.AddCookie(cookie)
+	values := url.Values{"csrf_token":{h.csrfToken(cookieRequest)}}
+	request = httptest.NewRequest(http.MethodPost, "/vms/vm-1/start", strings.NewReader(values.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(cookie)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusSeeOther { t.Fatalf("valid start status=%d", response.Code) }
+	if service.startCalls != 1 { t.Fatalf("start calls=%d, want 1", service.startCalls) }
 }

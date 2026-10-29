@@ -71,6 +71,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		h.renderStatus(w, http.StatusServiceUnavailable, "login", map[string]string{"Error": "Operator authentication is not configured. Set VM_CONTROLLER_OPERATOR_TOKEN."})
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	if err := r.ParseForm(); err != nil {
 		h.renderStatus(w, http.StatusBadRequest, "login", map[string]string{"Error": "Invalid login form."})
 		return
@@ -116,6 +117,7 @@ func (h *Handler) newVMPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) createVM(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	if err := r.ParseForm(); err != nil { h.renderStatus(w, http.StatusBadRequest, "new-vm", formData{Limits:h.limits, Error:"Invalid form submission."}); return }
 	name := strings.TrimSpace(r.FormValue("name"))
 	vcpus, cpuErr := strconv.Atoi(r.FormValue("vcpus"))
@@ -129,7 +131,7 @@ func (h *Handler) createVM(w http.ResponseWriter, r *http.Request) {
 	if !safeFormID(key) { h.renderStatus(w, http.StatusBadRequest, "new-vm", formData{Limits:h.limits, Error:"The form's idempotency key is invalid. Reload the form and retry."}); return }
 	_, op, err := h.service.CreateVM(r.Context(), controllerapi.CreateVMRequest{Name:name, VCPUs:vcpus, MemoryMiB:memory, ImageID:imageID}, key)
 	if err != nil {
-		h.renderStatus(w, http.StatusServiceUnavailable, "new-vm", formData{Limits:h.limits, Error:err.Error(), IdempotencyKey:key})
+		h.renderStatus(w, http.StatusServiceUnavailable, "new-vm", formData{Limits:h.limits, Error:"Could not submit the VM request. Check worker health and capacity, then retry with the same form.", IdempotencyKey:key})
 		return
 	}
 	http.Redirect(w, r, "/?notice="+template.URLQueryEscaper("VM request recorded; operation "+string(op.State)), http.StatusSeeOther)
@@ -148,7 +150,7 @@ func (h *Handler) lifecycleAction(w http.ResponseWriter, r *http.Request, start 
 	var err error
 	if start { _, op, err = h.service.StartVM(r.Context(), r.PathValue("vmID")) } else { _, op, err = h.service.StopVM(r.Context(), r.PathValue("vmID")) }
 	if err != nil {
-		http.Redirect(w, r, "/?error="+template.URLQueryEscaper("Operation failed: "+err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, "/?error="+template.URLQueryEscaper("Operation could not be confirmed. Refresh the dashboard before retrying."), http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/?notice="+template.URLQueryEscaper("Operation "+op.ID+" is "+string(op.State)), http.StatusSeeOther)

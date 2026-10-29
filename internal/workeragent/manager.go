@@ -137,6 +137,7 @@ type vmEntry struct {
 	client Hypervisor
 	process Process
 	socket string
+	vmConfig cloudhypervisor.VMConfig
 }
 
 type Manager struct {
@@ -194,7 +195,7 @@ func (m *Manager) Prepare(ctx context.Context, req CreateRequest) (VMReport, err
 	if strings.TrimSpace(req.Name) == "" || len(req.Name) > 128 {
 		return VMReport{}, fmt.Errorf("%w: name must be between 1 and 128 characters", ErrInvalid)
 	}
-	if req.VCPUs < 1 || req.VCPUs > m.cfg.MaxVCPUs || req.MemoryBytes == 0 || req.MemoryBytes > m.cfg.MaxMemoryBytes {
+	if req.VCPUs < 1 || req.VCPUs > m.cfg.MaxVCPUs || req.MemoryBytes == 0 || req.MemoryBytes > m.cfg.MaxMemoryBytes || req.MemoryBytes > uint64(1<<63-1) {
 		return VMReport{}, fmt.Errorf("%w: requested resources exceed worker limits", ErrInvalid)
 	}
 	image, ok := m.images[req.ImageID]
@@ -233,7 +234,7 @@ func (m *Manager) Prepare(ctx context.Context, req CreateRequest) (VMReport, err
 	}
 	now := m.now().UTC()
 	report := VMReport{WorkerID: m.cfg.WorkerID, VMID: req.VMID, OperationID: req.OperationID, ImageID: req.ImageID, VCPUs: req.VCPUs, MemoryBytes: req.MemoryBytes, State: string(cloudhypervisor.StatusCreated), CreatedAt: now, UpdatedAt: now}
-	m.vms[req.VMID] = &vmEntry{report: report, client: hv, process: proc, socket: socket}
+	m.vms[req.VMID] = &vmEntry{report: report, client: hv, process: proc, socket: socket, vmConfig: vmConfig}
 	m.ops[req.OperationID] = req.VMID
 	return report, nil
 }
@@ -247,6 +248,20 @@ func (m *Manager) Start(ctx context.Context, operationID, vmID string) (VMReport
 	if entry.report.State == string(cloudhypervisor.StatusRunning) { return entry.report, nil }
 	if entry.report.State != string(cloudhypervisor.StatusCreated) && entry.report.State != string(cloudhypervisor.StatusShutdown) {
 		return VMReport{}, fmt.Errorf("%w: cannot start VM in state %s", ErrConflict, entry.report.State)
+	}
+	if entry.client == nil {
+		hv, proc, err := m.runtime.Launch(ctx, m.cfg.CloudHypervisor, entry.socket, m.cfg.RequestTimeout, m.cfg.StartupTimeout)
+		if err != nil { return VMReport{}, fmt.Errorf("relaunch VMM for stopped VM: %w", err) }
+		createCtx, cancel := context.WithTimeout(ctx, m.cfg.RequestTimeout)
+		err = hv.Create(createCtx, entry.vmConfig)
+		cancel()
+		if err != nil {
+			_ = proc.Kill()
+			_ = proc.Wait()
+			_ = os.Remove(entry.socket)
+			return VMReport{}, fmt.Errorf("recreate stopped VM: %w", err)
+		}
+		entry.client, entry.process = hv, proc
 	}
 	ctxCall, cancel := context.WithTimeout(ctx, m.cfg.RequestTimeout)
 	err := entry.client.Start(ctxCall)

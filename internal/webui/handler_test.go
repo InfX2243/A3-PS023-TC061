@@ -165,7 +165,7 @@ func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
 		t.Fatalf("documentation status = %d; body=%s", response.Code, response.Body.String())
 	}
 	body := response.Body.String()
-	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\"", "id=\"main-content\"", "Skip to main content", "/console"} {
+	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\"", "id=\"main-content\"", "Skip to main content", "/console", "aria-current=\"location\"", "font-size:16px", "/assets/ui.js"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("documentation page omitted %q", expected)
 		}

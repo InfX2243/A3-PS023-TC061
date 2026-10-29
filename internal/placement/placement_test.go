@@ -87,7 +87,7 @@ func TestPlaceAndReserveUsesDeterministicTieBreak(t *testing.T) {
 func TestConcurrentReservationsCannotExceedTrackedSafeCapacity(t *testing.T) {
 	s := newPlacementStore(t)
 	now := time.Now().UTC()
-	addWorker(t, s, "worker-a", "healthy", 7*gib, 7*gib, now)
+	addWorker(t, s, "worker-a", "healthy", 7*gib, 8*gib, now)
 	addVM(t, s, "vm-1", 4*gib)
 	addVM(t, s, "vm-2", 4*gib)
 	policy := Policy{SafetyReserveBytes: gib, StaleAfter: 30*time.Second}

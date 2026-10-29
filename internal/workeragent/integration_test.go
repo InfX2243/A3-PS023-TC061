@@ -75,7 +75,7 @@ func TestStartTimeoutIsReturnedWithoutClaimingRunning(t *testing.T) {
 
 func TestStatusSurfacesVMMProcessExit(t *testing.T) {
 	hv := &failedStatusHypervisor{}
-	runtime := &fakeRuntime{hv: hv, proc: &fakeProcess{}}
+	runtime := customRuntime{hv: hv, proc: &fakeProcess{}}
 	manager, err := NewManagerWithRuntime(Config{
 		WorkerID: "worker-a", RuntimeDir: filepath.Join(t.TempDir(), "runtime"),
 		CloudHypervisor: "/usr/bin/cloud-hypervisor", MaxVCPUs: 8, MaxMemoryBytes: 8 << 30,

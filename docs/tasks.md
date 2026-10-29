@@ -104,7 +104,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [x] Make repeated create/start/stop requests state-aware and avoid launching a second VMM for an existing VM.
 - [x] Add a runnable `cmd/worker-agent` entry point and credential-free `worker.example.json` template.
 - [x] CI formatting, `go test ./...`, `go vet ./...`, and both binary builds passed on commit `136211af60d7fcac848743b1bac782a7951440ea` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40932420786)).
-- [ ] Add persistent worker-side recovery and restart behavior where required by T-09/T-14 integration.
+- [x] Define safe worker-agent restart semantics: graceful shutdown kills/reaps owned VMMs; a fresh manager does not assume old in-memory VM records still exist, and controller reconciliation preserves uncertainty when worker status is missing. Durable VMM reattachment is intentionally deferred because the MVP does not yet define cross-process child ownership recovery.
 - Acceptance: create/start/stop/status work on one host; repeated commands do not spawn duplicate VM processes; invalid image/path inputs are rejected; child processes are reaped.
 - Evidence: implementation files are present at `internal/workeragent/manager.go`, `internal/workeragent/http.go`, `internal/workeragent/manager_test.go`, `internal/workeragent/integration_test.go`, `cmd/worker-agent/main.go`, and `worker.example.json`; CI passed on commit `136211af60d7fcac848743b1bac782a7951440ea` ([workflow run](https://github.com/InfX2243/A3-PS023-TC061/actions/runs/40932420786)).
 - Status: **automated tests pass; real Cloud Hypervisor runtime and worker-agent restart behavior remain pending**. The tests use simulated VMMs, not an AWS-backed guest.

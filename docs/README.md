@@ -11,6 +11,7 @@ Planning branch: `docs/mvp-requirements-design-task-plan`
 3. [Task plan](./tasks.md) — ordered, atomic tasks with dependencies and definition of done.
 4. [AI-driven development workflow](./ai-development-workflow.md) — how to implement and review one task at a time.
 5. [AWS deployment plan](./aws-deployment.md) — prerequisites, network layout, rollout, validation, and cost guardrails.
+6. [AWS worker feasibility gate](./deployment/aws-worker-validation.md) — selected EC2 candidate, pinned VMM/guest candidates, and required runtime evidence.
 
 ## MVP north star
 
@@ -18,7 +19,7 @@ Deliver a working web interface and authenticated API that can create, start, st
 
 ## Important feasibility gate
 
-Cloud Hypervisor requires access to KVM. Before committing to an AWS instance family, prove that the chosen worker instance exposes usable `/dev/kvm` and can run the target guest image. If this is not supported on the selected AWS configuration, stop and choose a supported bare-metal / virtualization-capable configuration or use local KVM hosts for the workers while keeping the controller on AWS. Do not assume ordinary EC2 virtual instances provide nested KVM.
+Cloud Hypervisor requires access to KVM. The current candidate is one temporary `c8i.xlarge` in `ap-south-1`, with Cloud Hypervisor v54.0 and a pinned Ubuntu 24.04 LTS cloud-image build. AWS documents nested virtualization for supported families, but the candidate remains unverified until `/dev/kvm` and a real guest boot/stop cycle pass. See the [AWS worker feasibility gate](./deployment/aws-worker-validation.md).
 
 ## Current status
 

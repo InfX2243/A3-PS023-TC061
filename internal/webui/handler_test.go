@@ -42,7 +42,7 @@ func newTestUI() (*Handler, http.Handler) {
 
 func TestDashboardRequiresLoginAndSetsSecurityHeaders(t *testing.T) {
 	response := httptest.NewRecorder()
-	testUI().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+	testUI().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/console", nil))
 	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/login" { t.Fatalf("unauthenticated dashboard status/location = %d/%q", response.Code, response.Header().Get("Location")) }
 
 	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
@@ -51,7 +51,7 @@ func TestDashboardRequiresLoginAndSetsSecurityHeaders(t *testing.T) {
 	testUI().ServeHTTP(loginResponse, login)
 	if loginResponse.Code != http.StatusSeeOther { t.Fatalf("login status = %d", loginResponse.Code) }
 	cookie := loginResponse.Result().Cookies()[0]
-	dashboard := httptest.NewRequest(http.MethodGet, "/", nil)
+	dashboard := httptest.NewRequest(http.MethodGet, "/console", nil)
 	dashboard.AddCookie(cookie)
 	dashboardResponse := httptest.NewRecorder()
 	testUI().ServeHTTP(dashboardResponse, dashboard)
@@ -97,7 +97,7 @@ func TestCreateFormRequiresCSRFAndPassesStableIdempotencyKey(t *testing.T) {
 	rejected := httptest.NewRecorder()
 	handler.ServeHTTP(rejected, withoutCSRF)
 	if rejected.Code != http.StatusForbidden { t.Fatalf("missing CSRF status=%d, want 403", rejected.Code) }
-	cookieRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	cookieRequest := httptest.NewRequest(http.MethodGet, "/console", nil)
 	cookieRequest.AddCookie(cookie)
 	values.Set("csrf_token", h.csrfToken(cookieRequest))
 	request := httptest.NewRequest(http.MethodPost, "/vms", strings.NewReader(values.Encode()))
@@ -148,7 +148,7 @@ func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
 	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	loginResponse := httptest.NewRecorder()
 	mux.ServeHTTP(loginResponse, login)
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request := httptest.NewRequest(http.MethodGet, "/console", nil)
 	request.AddCookie(loginResponse.Result().Cookies()[0])
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
@@ -156,4 +156,155 @@ func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "http-equiv=\"refresh\" content=\"5\"") { t.Fatal("dashboard did not refresh for unknown operation") }
 	for _, expected := range []string{"demo", "worker-a", "ubuntu-demo", "start: unknown"} { if !strings.Contains(response.Body.String(), expected) { t.Fatalf("dashboard omitted %q", expected) } }
 	if strings.Contains(response.Body.String(), ">Start</button>") || strings.Contains(response.Body.String(), ">Stop</button>") { t.Fatal("dashboard offered lifecycle action for unknown state") }
+}
+
+func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
+	response := httptest.NewRecorder()
+	testUI().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/docs", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("documentation status = %d; body=%s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\"", "id=\"main-content\"", "Skip to main content", "/console", "aria-current=\"location\"", "font-size:16px", "/assets/ui.js"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("documentation page omitted %q", expected)
+		}
+	}
+	if strings.Contains(body, "name=\"token\"") {
+		t.Fatal("public documentation should not render the operator login form")
+	}
+}
+
+func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testing.T) {
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	testUI().ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/console", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	testUI().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("dashboard status = %d", response.Code)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "href=\"/docs\"") {
+		t.Fatal("dashboard navigation omitted documentation link")
+	}
+	if strings.Contains(body, "Your compute fleet, at a glance.") {
+		t.Fatal("dashboard retained the duplicate hero message")
+	}
+	if strings.Contains(body, "Operational signals") {
+		t.Fatal("dashboard retained a redundant inventory summary")
+	}
+}
+
+func TestLandingPageIsPublicAndHasDistinctDocumentationAndLoginRoutes(t *testing.T) {
+	response := httptest.NewRecorder()
+	testUI().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("landing status = %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{"Infrastructure operations,", "href=\"/docs\"", "href=\"/login\"", "id=\"platform\"", "prefers-reduced-motion", "illustrative interface preview"} {
+		if !strings.Contains(strings.ToLower(body), strings.ToLower(expected)) {
+			t.Fatalf("landing page omitted %q", expected)
+		}
+	}
+	if strings.Contains(body, "name=\"token\"") {
+		t.Fatal("public landing page should not contain the operator login form")
+	}
+}
+
+func TestLoginRedirectsToOperatorConsole(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	testUI().ServeHTTP(response, request)
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/console" {
+		t.Fatalf("login status/location = %d/%q, want 303 /console", response.Code, response.Header().Get("Location"))
+	}
+}
+
+
+func TestUIEnhancementAssetAndFormLoadingStates(t *testing.T) {
+	_, handler := newTestUI()
+	assetResponse := httptest.NewRecorder()
+	handler.ServeHTTP(assetResponse, httptest.NewRequest(http.MethodGet, "/assets/ui.js", nil))
+	if assetResponse.Code != http.StatusOK {
+		t.Fatalf("asset status = %d", assetResponse.Code)
+	}
+	if !strings.Contains(assetResponse.Header().Get("Content-Type"), "javascript") {
+		t.Fatalf("asset content type = %q", assetResponse.Header().Get("Content-Type"))
+	}
+	asset := assetResponse.Body.String()
+	if strings.Contains(asset, "\\n") {
+		t.Fatal("enhancement asset contains escaped line breaks instead of JavaScript source lines")
+	}
+	if !strings.HasPrefix(asset, "// Progressive enhancements for the server-rendered operator UI.\n(function () {") {
+		t.Fatal("enhancement asset is not emitted as a valid source file")
+	}
+	for _, expected := range []string{"IntersectionObserver", "aria-current", "Signing in…", "Signing out…", "prefers-reduced-motion"} {
+		if !strings.Contains(asset, expected) {
+			t.Fatalf("enhancement asset omitted %q", expected)
+		}
+	}
+
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if !strings.Contains(loginResponse.Body.String(), "src=\"/assets/ui.js\"") {
+		t.Fatal("login page does not load progressive form feedback")
+	}
+	if !strings.Contains(loginResponse.Body.String(), "ui-button-spinner") {
+		t.Fatal("login page does not include visible loading indicator styles")
+	}
+	vmLogin := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	vmLogin.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	vmLoginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(vmLoginResponse, vmLogin)
+	vmRequest := httptest.NewRequest(http.MethodGet, "/vms/new", nil)
+	vmRequest.AddCookie(vmLoginResponse.Result().Cookies()[0])
+	vmResponse := httptest.NewRecorder()
+	handler.ServeHTTP(vmResponse, vmRequest)
+	if vmResponse.Code != http.StatusOK || !strings.Contains(vmResponse.Body.String(), "src=\"/assets/ui.js\"") {
+		t.Fatalf("VM form did not load form feedback: status=%d", vmResponse.Code)
+	}
+
+}
+
+func TestPrimaryPagesExposeKeyboardSkipNavigation(t *testing.T) {
+	_, handler := newTestUI()
+	loginRequest := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	loginRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	cookie := loginResponse.Result().Cookies()[0]
+
+	pages := []struct {
+		path string
+		cookie bool
+	}{
+		{path: "/", cookie: false},
+		{path: "/docs", cookie: false},
+		{path: "/login", cookie: false},
+		{path: "/console", cookie: true},
+		{path: "/vms/new", cookie: true},
+	}
+	for _, page := range pages {
+		t.Run(page.path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, page.path, nil)
+			if page.cookie {
+				request.AddCookie(cookie)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("GET %s status = %d", page.path, response.Code)
+			}
+			body := response.Body.String()
+			if !strings.Contains(body, "href=\"#main-content\"") || !strings.Contains(body, "id=\"main-content\"") {
+				t.Fatalf("GET %s is missing a working main-content skip link", page.path)
+			}
+		})
+	}
 }

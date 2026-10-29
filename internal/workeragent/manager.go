@@ -158,6 +158,7 @@ type Manager struct {
 	images  map[string]Image
 	vms     map[string]*vmEntry
 	ops     map[string]string
+	opKinds map[string]string
 	now     func() time.Time
 }
 
@@ -196,7 +197,7 @@ func NewManagerWithRuntime(cfg Config, runtime Runtime) (*Manager, error) {
 		images[image.ID] = image
 	}
 	if len(images) == 0 { return nil, errors.New("at least one approved image must be configured") }
-	return &Manager{cfg: cfg, runtime: runtime, images: images, vms: make(map[string]*vmEntry), ops: make(map[string]string), now: time.Now}, nil
+	return &Manager{cfg: cfg, runtime: runtime, images: images, vms: make(map[string]*vmEntry), ops: make(map[string]string), opKinds: make(map[string]string), now: time.Now}, nil
 }
 
 func (m *Manager) Prepare(ctx context.Context, req CreateRequest) (VMReport, error) {
@@ -215,13 +216,14 @@ func (m *Manager) Prepare(ctx context.Context, req CreateRequest) (VMReport, err
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if existingVMID, ok := m.ops[req.OperationID]; ok {
-		if existingVMID != req.VMID { return VMReport{}, fmt.Errorf("%w: operation_id was already used for another VM", ErrConflict) }
-		if entry := m.vms[existingVMID]; entry != nil { return entry.report, nil }
+		if existingVMID != req.VMID || m.opKinds[req.OperationID] != "prepare" { return VMReport{}, fmt.Errorf("%w: operation_id was already used for another operation", ErrConflict) }
+		if entry := m.vms[existingVMID]; entry != nil {
+			if entry.report.Name == req.Name && entry.report.ImageID == req.ImageID && entry.report.VCPUs == req.VCPUs && entry.report.MemoryBytes == req.MemoryBytes { return entry.report, nil }
+			return VMReport{}, fmt.Errorf("%w: operation_id was reused with a different VM request", ErrConflict)
+		}
 	}
 	if entry := m.vms[req.VMID]; entry != nil {
-		if entry.report.OperationID == req.OperationID && entry.report.ImageID == req.ImageID && entry.report.VCPUs == req.VCPUs && entry.report.MemoryBytes == req.MemoryBytes {
-			return entry.report, nil
-		}
+		if entry.report.OperationID == req.OperationID && m.opKinds[req.OperationID] == "prepare" && entry.report.Name == req.Name && entry.report.ImageID == req.ImageID && entry.report.VCPUs == req.VCPUs && entry.report.MemoryBytes == req.MemoryBytes { return entry.report, nil }
 		return VMReport{}, fmt.Errorf("%w: VM already exists", ErrConflict)
 	}
 
@@ -253,6 +255,7 @@ func (m *Manager) Prepare(ctx context.Context, req CreateRequest) (VMReport, err
 	report := VMReport{WorkerID: m.cfg.WorkerID, Name: req.Name, VMID: req.VMID, OperationID: req.OperationID, ImageID: req.ImageID, VCPUs: req.VCPUs, MemoryBytes: req.MemoryBytes, State: string(cloudhypervisor.StatusCreated), CreatedAt: now, UpdatedAt: now}
 	m.vms[req.VMID] = &vmEntry{report: report, client: hv, process: proc, socket: socket, vmConfig: vmConfig}
 	m.ops[req.OperationID] = req.VMID
+	m.opKinds[req.OperationID] = "prepare"
 	return report, nil
 }
 
@@ -262,7 +265,16 @@ func (m *Manager) Start(ctx context.Context, operationID, vmID string) (VMReport
 	entry, ok := m.vms[vmID]
 	if !ok { return VMReport{}, ErrNotFound }
 	if !idPattern.MatchString(operationID) { return VMReport{}, fmt.Errorf("%w: operation_id must be a safe identifier", ErrInvalid) }
-	if entry.report.State == string(cloudhypervisor.StatusRunning) { return entry.report, nil }
+	if usedVM, used := m.ops[operationID]; used {
+		if usedVM != vmID || m.opKinds[operationID] != "start" { return VMReport{}, fmt.Errorf("%w: operation_id was already used", ErrConflict) }
+		if entry.report.OperationID == operationID { return entry.report, nil }
+	}
+	if entry.report.State == string(cloudhypervisor.StatusRunning) {
+		entry.report.OperationID = operationID
+		entry.report.UpdatedAt = m.now().UTC()
+		m.ops[operationID], m.opKinds[operationID] = vmID, "start"
+		return entry.report, nil
+	}
 	if entry.report.State != string(cloudhypervisor.StatusCreated) && entry.report.State != string(cloudhypervisor.StatusShutdown) {
 		return VMReport{}, fmt.Errorf("%w: cannot start VM in state %s", ErrConflict, entry.report.State)
 	}
@@ -287,6 +299,7 @@ func (m *Manager) Start(ctx context.Context, operationID, vmID string) (VMReport
 	entry.report.State = string(cloudhypervisor.StatusRunning)
 	entry.report.OperationID = operationID
 	entry.report.UpdatedAt = m.now().UTC()
+	m.ops[operationID], m.opKinds[operationID] = vmID, "start"
 	return entry.report, nil
 }
 
@@ -295,8 +308,17 @@ func (m *Manager) Stop(ctx context.Context, operationID, vmID string) (VMReport,
 	defer m.mu.Unlock()
 	entry, ok := m.vms[vmID]
 	if !ok { return VMReport{}, ErrNotFound }
-	if operationID == "" { return VMReport{}, fmt.Errorf("%w: operation_id is required", ErrInvalid) }
-	if entry.report.State == string(cloudhypervisor.StatusShutdown) { return entry.report, nil }
+	if !idPattern.MatchString(operationID) { return VMReport{}, fmt.Errorf("%w: operation_id must be a safe identifier", ErrInvalid) }
+	if usedVM, used := m.ops[operationID]; used {
+		if usedVM != vmID || m.opKinds[operationID] != "stop" { return VMReport{}, fmt.Errorf("%w: operation_id was already used", ErrConflict) }
+		if entry.report.OperationID == operationID { return entry.report, nil }
+	}
+	if entry.report.State == string(cloudhypervisor.StatusShutdown) {
+		entry.report.OperationID = operationID
+		entry.report.UpdatedAt = m.now().UTC()
+		m.ops[operationID], m.opKinds[operationID] = vmID, "stop"
+		return entry.report, nil
+	}
 	if entry.report.State != string(cloudhypervisor.StatusRunning) && entry.report.State != string(cloudhypervisor.StatusPaused) {
 		return VMReport{}, fmt.Errorf("%w: cannot stop VM in state %s", ErrConflict, entry.report.State)
 	}
@@ -317,6 +339,7 @@ func (m *Manager) Stop(ctx context.Context, operationID, vmID string) (VMReport,
 	entry.report.State = string(cloudhypervisor.StatusShutdown)
 	entry.report.OperationID = operationID
 	entry.report.UpdatedAt = m.now().UTC()
+	m.ops[operationID], m.opKinds[operationID] = vmID, "stop"
 	entry.client = nil
 	entry.process = nil
 	return entry.report, nil

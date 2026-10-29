@@ -13,12 +13,12 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
 )
 
-type fakeUIService struct { createCalls int; lastKey string; startCalls int; stopCalls int }
+type fakeUIService struct { createCalls int; lastKey string; startCalls int; stopCalls int; vms []domain.VM; latest domain.Operation; latestErr error }
 func (*fakeUIService) ListWorkers(context.Context) ([]domain.Worker, error) {
 	return []domain.Worker{{ID:"worker-a", Name:"Worker A", State:domain.WorkerHealthy, AvailableMemoryBytes:2*1024*1024*1024, MemoryLimitBytes:4*1024*1024*1024}}, nil
 }
-func (*fakeUIService) ListVMs(context.Context) ([]domain.VM, error) { return []domain.VM{}, nil }
-func (*fakeUIService) LatestOperation(context.Context, string) (domain.Operation, error) { return domain.Operation{}, controllerapi.ErrNotFound }
+func (s *fakeUIService) ListVMs(context.Context) ([]domain.VM, error) { return s.vms, nil }
+func (s *fakeUIService) LatestOperation(context.Context, string) (domain.Operation, error) { if s.latestErr != nil { return domain.Operation{}, s.latestErr }; return s.latest, nil }
 func (s *fakeUIService) CreateVM(_ context.Context, _ controllerapi.CreateVMRequest, key string) (domain.VM, domain.Operation, error) {
 	s.createCalls++
 	s.lastKey = key
@@ -134,4 +134,25 @@ func TestLifecycleActionsRequireCSRF(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusSeeOther { t.Fatalf("valid start status=%d", response.Code) }
 	if service.startCalls != 1 { t.Fatalf("start calls=%d, want 1", service.startCalls) }
+}
+
+func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
+	service := &fakeUIService{
+		vms: []domain.VM{{ID:"vm-1", Name:"demo", Observed:domain.VMUnknown, MemoryBytes:512*1024*1024}},
+		latest: domain.Operation{ID:"op-1", Type:domain.OperationStart, State:domain.OperationUnknown},
+	}
+	mux := http.NewServeMux()
+	h := NewHandler(service, "operator-secret", Limits{MaxVCPUs:8, MaxMemoryMiB:8192, AllowedImages:[]string{"ubuntu-demo"}}, false)
+	h.Register(mux)
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	mux.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("dashboard status=%d", response.Code) }
+	if !strings.Contains(response.Body.String(), "http-equiv=\"refresh\" content=\"5\"") { t.Fatal("dashboard did not refresh for unknown operation") }
+	if strings.Contains(response.Body.String(), ">Start</button>") || strings.Contains(response.Body.String(), ">Stop</button>") { t.Fatal("dashboard offered lifecycle action for unknown state") }
 }

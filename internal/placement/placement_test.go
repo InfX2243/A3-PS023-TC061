@@ -99,7 +99,7 @@ func TestConcurrentReservationsCannotExceedTrackedSafeCapacity(t *testing.T) {
 		wg.Add(1)
 		go func(vmID string) {
 			defer wg.Done()
-			_, err := reserve(t, s, vmID, 4*gib, policy, now)
+			_, err := reserve(t, s, vmID, 4*gib, policy, now.Add(time.Second))
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil { successes++ } else { failures = append(failures, err) }

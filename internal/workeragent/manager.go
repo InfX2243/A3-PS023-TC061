@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -225,14 +226,19 @@ func (m *Manager) Prepare(ctx context.Context, req CreateRequest) (VMReport, err
 	}
 
 	socket := filepath.Join(m.cfg.RuntimeDir, req.VMID, "api.sock")
+	diskPath := ""
+	if image.DiskPath != "" {
+		diskPath = filepath.Join(filepath.Dir(socket), "root.img")
+		if err := copyDiskImage(image.DiskPath, diskPath); err != nil { return VMReport{}, fmt.Errorf("stage per-VM disk image: %w", err) }
+	}
 	hv, proc, err := m.runtime.Launch(ctx, m.cfg.CloudHypervisor, socket, m.cfg.RequestTimeout, m.cfg.StartupTimeout)
-	if err != nil { return VMReport{}, fmt.Errorf("launch VMM: %w", err) }
+	if err != nil { if diskPath != "" { _ = os.Remove(diskPath) }; return VMReport{}, fmt.Errorf("launch VMM: %w", err) }
 	vmConfig := cloudhypervisor.VMConfig{
 		CPUs: cloudhypervisor.CPUConfig{BootVCPUs: req.VCPUs, MaxVCPUs: req.VCPUs},
 		Memory: &cloudhypervisor.MemoryConfig{Size: int64(req.MemoryBytes)},
 		Payload: cloudhypervisor.PayloadConfig{Kernel: image.KernelPath, Firmware: image.FirmwarePath, Cmdline: image.Cmdline},
 	}
-	if image.DiskPath != "" { vmConfig.Disks = []cloudhypervisor.DiskConfig{{Path: image.DiskPath, ImageType: "Raw"}} }
+	if image.DiskPath != "" { vmConfig.Disks = []cloudhypervisor.DiskConfig{{Path: diskPath, ImageType: "Raw"}} }
 	callCtx, cancel := context.WithTimeout(ctx, m.cfg.RequestTimeout)
 	err = hv.Create(callCtx, vmConfig)
 	cancel()
@@ -240,6 +246,7 @@ func (m *Manager) Prepare(ctx context.Context, req CreateRequest) (VMReport, err
 		_ = proc.Kill()
 		_ = proc.Wait()
 		_ = os.Remove(socket)
+		if diskPath != "" { _ = os.Remove(diskPath) }
 		return VMReport{}, fmt.Errorf("create VM in Cloud Hypervisor: %w", err)
 	}
 	now := m.now().UTC()
@@ -343,5 +350,27 @@ func (m *Manager) Close() error {
 		_ = os.Remove(entry.socket)
 	}
 	if len(errs) != 0 { return errors.New(strings.Join(errs, "; ")) }
+	return nil
+}
+
+func copyDiskImage(source, destination string) error {
+	if filepath.Clean(source) == filepath.Clean(destination) {
+		return errors.New("base image and per-VM disk paths must differ")
+	}
+	input, err := os.Open(source)
+	if err != nil { return fmt.Errorf("open configured base disk: %w", err) }
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil { return fmt.Errorf("stat configured base disk: %w", err) }
+	if !info.Mode().IsRegular() { return errors.New("configured base disk must be a regular file") }
+	if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil { return fmt.Errorf("create per-VM disk directory: %w", err) }
+	if err := os.Chmod(filepath.Dir(destination), 0700); err != nil { return fmt.Errorf("restrict per-VM disk directory: %w", err) }
+	output, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil { return fmt.Errorf("create per-VM disk: %w", err) }
+	_, copyErr := io.Copy(output, input)
+	if copyErr == nil { copyErr = output.Sync() }
+	closeErr := output.Close()
+	if copyErr != nil { _ = os.Remove(destination); return fmt.Errorf("copy base disk to per-VM disk: %w", copyErr) }
+	if closeErr != nil { _ = os.Remove(destination); return fmt.Errorf("close per-VM disk: %w", closeErr) }
 	return nil
 }

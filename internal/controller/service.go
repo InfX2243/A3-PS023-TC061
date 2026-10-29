@@ -15,6 +15,7 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
 	"github.com/InfX2243/A3-PS023-TC061/internal/placement"
 	"github.com/InfX2243/A3-PS023-TC061/internal/store"
+	"github.com/InfX2243/A3-PS023-TC061/internal/workerhealth"
 )
 
 type Service struct {
@@ -60,7 +61,11 @@ func (s *Service) ListWorkers(ctx context.Context) ([]domain.Worker, error) {
 		var available, limit int64
 		if err := rows.Scan(&w.ID, &w.Name, &w.Endpoint, &state, &heartbeat, &available, &limit); err != nil { return nil, fmt.Errorf("scan worker: %w", err) }
 		w.State = workerState(state)
-		if heartbeat.Valid { w.LastHeartbeat, _ = time.Parse(time.RFC3339Nano, heartbeat.String) }
+		if heartbeat.Valid {
+			w.LastHeartbeat, _ = time.Parse(time.RFC3339Nano, heartbeat.String)
+			age := s.now().UTC().Sub(w.LastHeartbeat)
+			if age < 0 { w.State = domain.WorkerUnavailable } else if age > 30*time.Second && w.State == domain.WorkerHealthy { w.State = domain.WorkerStale }
+		}
 		if available > 0 { w.AvailableMemoryBytes = uint64(available) }
 		if limit > 0 { w.MemoryLimitBytes = uint64(limit) }
 		result = append(result, w)
@@ -76,6 +81,24 @@ func workerState(value string) domain.WorkerState {
 	case "stale": return domain.WorkerStale
 	default: return domain.WorkerUnavailable
 	}
+}
+
+
+func (s *Service) RecordWorkerHeartbeat(ctx context.Context, heartbeat workerhealth.Heartbeat) error {
+	now := s.now().UTC()
+	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
+		var configuredLimit int64
+		err := tx.QueryRowContext(ctx, "SELECT memory_limit_bytes FROM workers WHERE id = ?", heartbeat.WorkerID).Scan(&configuredLimit)
+		if errors.Is(err, sql.ErrNoRows) { return fmt.Errorf("unconfigured worker %q", heartbeat.WorkerID) }
+		if err != nil { return fmt.Errorf("load configured worker limit: %w", err) }
+		if configuredLimit <= 0 || heartbeat.ConfiguredMemoryCapBytes == 0 || heartbeat.ConfiguredMemoryCapBytes > uint64(configuredLimit) { return fmt.Errorf("worker %q reported an invalid configured memory cap", heartbeat.WorkerID) }
+		if heartbeat.AvailableMemoryBytes > uint64(configuredLimit) { return fmt.Errorf("worker %q reported available memory above its controller-configured limit", heartbeat.WorkerID) }
+		state := "unreachable"
+		if heartbeat.CloudHypervisorHealthy { state = "healthy" }
+		_, err = tx.ExecContext(ctx, "UPDATE workers SET state=?, last_heartbeat=?, available_memory_bytes=?, updated_at=? WHERE id=?", state, now.Format(time.RFC3339Nano), int64(heartbeat.AvailableMemoryBytes), now.Format(time.RFC3339Nano), heartbeat.WorkerID)
+		if err != nil { return fmt.Errorf("persist worker heartbeat: %w", err) }
+		return nil
+	})
 }
 
 func (s *Service) ListVMs(ctx context.Context) ([]domain.VM, error) {

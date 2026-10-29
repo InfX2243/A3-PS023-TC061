@@ -23,6 +23,8 @@ type candidate struct {
 	available     uint64
 	limit         uint64
 	reserved      uint64
+	reservedSinceHeartbeat uint64
+	lastHeartbeat time.Time
 	safeCapacity  uint64
 }
 
@@ -51,32 +53,40 @@ func PlaceAndReserve(ctx context.Context, tx *sql.Tx, vmID string, memoryBytes u
 		if err != nil { continue }
 		age := now.Sub(last)
 		if age < 0 || age > policy.StaleAfter { continue }
-		candidates = append(candidates, candidate{id: id, available: uint64(available), limit: uint64(limit)})
+		candidates = append(candidates, candidate{id: id, available: uint64(available), limit: uint64(limit), lastHeartbeat: last})
 	}
 	if err := rows.Err(); err != nil { return "", fmt.Errorf("iterate workers for placement: %w", err) }
 	if err := rows.Close(); err != nil { return "", fmt.Errorf("close worker placement rows: %w", err) }
 
-	reservedRows, err := tx.QueryContext(ctx, `SELECT worker_id, COALESCE(SUM(memory_bytes), 0)
-		FROM reservations WHERE state IN ('pending', 'active') GROUP BY worker_id`)
+	reservedRows, err := tx.QueryContext(ctx, `SELECT worker_id, memory_bytes, created_at
+		FROM reservations WHERE state IN ('pending', 'active')`)
 	if err != nil { return "", fmt.Errorf("query existing reservations: %w", err) }
 	reservedByWorker := make(map[string]uint64)
+	reservedSinceHeartbeat := make(map[string]uint64)
+	heartbeatByWorker := make(map[string]time.Time, len(candidates))
+	for _, c := range candidates { heartbeatByWorker[c.id] = c.lastHeartbeat }
 	for reservedRows.Next() {
-		var id string
+		var id, created string
 		var amount int64
-		if err := reservedRows.Scan(&id, &amount); err != nil { _ = reservedRows.Close(); return "", fmt.Errorf("scan reservation total: %w", err) }
-		if amount > 0 { reservedByWorker[id] = uint64(amount) }
+		if err := reservedRows.Scan(&id, &amount, &created); err != nil { _ = reservedRows.Close(); return "", fmt.Errorf("scan reservation: %w", err) }
+		if amount <= 0 { continue }
+		reservedByWorker[id] += uint64(amount)
+		createdAt, err := time.Parse(time.RFC3339Nano, created)
+		if err != nil { _ = reservedRows.Close(); return "", fmt.Errorf("parse reservation timestamp: %w", err) }
+		if heartbeat, ok := heartbeatByWorker[id]; ok && createdAt.After(heartbeat) { reservedSinceHeartbeat[id] += uint64(amount) }
 	}
-	if err := reservedRows.Err(); err != nil { _ = reservedRows.Close(); return "", fmt.Errorf("iterate reservation totals: %w", err) }
+	if err := reservedRows.Err(); err != nil { _ = reservedRows.Close(); return "", fmt.Errorf("iterate reservations: %w", err) }
 	if err := reservedRows.Close(); err != nil { return "", fmt.Errorf("close reservation rows: %w", err) }
 
 	var best *candidate
 	for i := range candidates {
 		c := &candidates[i]
 		c.reserved = reservedByWorker[c.id]
+		c.reservedSinceHeartbeat = reservedSinceHeartbeat[c.id]
 		availableCapacity := uint64(0)
 		if c.available > policy.SafetyReserveBytes {
 			remaining := c.available - policy.SafetyReserveBytes
-			if remaining > c.reserved { availableCapacity = remaining - c.reserved }
+			if remaining > c.reservedSinceHeartbeat { availableCapacity = remaining - c.reservedSinceHeartbeat }
 		}
 		limitCapacity := uint64(0)
 		if c.limit > c.reserved { limitCapacity = c.limit - c.reserved }
@@ -92,7 +102,7 @@ func PlaceAndReserve(ctx context.Context, tx *sql.Tx, vmID string, memoryBytes u
 	result, err := tx.ExecContext(ctx, `INSERT INTO reservations(vm_id, worker_id, memory_bytes, state, created_at, updated_at)
 		VALUES (?, ?, ?, 'pending', ?, ?)
 		ON CONFLICT(vm_id) DO UPDATE SET worker_id = excluded.worker_id,
-			memory_bytes = excluded.memory_bytes, state = 'pending', updated_at = excluded.updated_at
+			memory_bytes = excluded.memory_bytes, state = 'pending', created_at = excluded.created_at, updated_at = excluded.updated_at
 		WHERE reservations.state = 'released'`, vmID, best.id, int64(memoryBytes), now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
 	if err != nil { return "", fmt.Errorf("reserve memory for VM %q: %w", vmID, err) }
 	if affected, err := result.RowsAffected(); err != nil {

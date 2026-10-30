@@ -230,7 +230,7 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Depends on: T-15, T-18.
 
 ### T-23 — Bootstrap and auto-enroll EC2 worker agents
-- [x] Generate cloud-init user data from protected controller configuration; verify immutable worker-agent, Cloud Hypervisor, kernel, and disk artifacts against SHA-256 before installation.
+- [x] Generate cloud-init user data from protected controller configuration; verify immutable worker-agent, Cloud Hypervisor, and guest disk artifacts plus OVMF UEFI firmware against SHA-256 before installation.
 - [x] Retrieve the worker shared secret from an SSM SecureString using the worker instance role; do not embed the secret value in user data.
 - [x] Install and start the worker agent as a systemd service, advertise its private endpoint, and auto-enroll it on the first authenticated heartbeat.
 - [x] Restrict worker-agent ingress to the controller security group; reject public IP endpoints during auto-enrollment.

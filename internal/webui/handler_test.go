@@ -163,7 +163,7 @@ func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusOK { t.Fatalf("dashboard status=%d", response.Code) }
 	if !strings.Contains(response.Body.String(), "http-equiv=\"refresh\" content=\"5\"") { t.Fatal("dashboard did not refresh for unknown operation") }
-	for _, expected := range []string{"demo", "worker-a", "ubuntu-demo", "start: unknown"} { if !strings.Contains(response.Body.String(), expected) { t.Fatalf("dashboard omitted %q", expected) } }
+	for _, expected := range []string{"Worker inventory", "Virtual machines", "href=\"/vms\""} { if !strings.Contains(response.Body.String(), expected) { t.Fatalf("dashboard omitted workspace destination %q", expected) } }
 	if strings.Contains(response.Body.String(), ">Start</button>") || strings.Contains(response.Body.String(), ">Stop</button>") { t.Fatal("dashboard offered lifecycle action for unknown state") }
 }
 

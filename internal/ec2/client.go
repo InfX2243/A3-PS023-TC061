@@ -39,6 +39,7 @@ type LaunchInput struct {
 type Instance struct {
 	ID        string
 	Name      string
+	ManagedBy string
 	ImageID   string
 	Type      string
 	State     struct{ Name string }
@@ -172,7 +173,9 @@ func (c Client) Describe(ctx context.Context, region, id string) (Instance, erro
 	if out != nil {
 		for _, reservation := range out.Reservations {
 			for _, instance := range reservation.Instances {
-				return fromSDK(instance), nil
+				managed := fromSDK(instance)
+			if managed.ManagedBy != "aiori-controller" { return Instance{}, errors.New("EC2 instance is not managed by this controller") }
+			return managed, nil
 			}
 		}
 	}
@@ -238,6 +241,7 @@ func (c Client) Action(ctx context.Context, region, id, action string) error {
 	if !regionPattern.MatchString(region) || !validID(id, "i-") {
 		return errors.New("valid region and EC2 instance ID are required")
 	}
+	if _, err := c.Describe(ctx, region, id); err != nil { return fmt.Errorf("refuse lifecycle action for unmanaged or unavailable instance: %w", err) }
 	api, err := c.sdk(ctx, region)
 	if err != nil {
 		return err
@@ -263,6 +267,7 @@ func fromSDK(v types.Instance) Instance {
 	out.VPCID, out.SubnetID = aws.ToString(v.VpcId), aws.ToString(v.SubnetId)
 	for _, tag := range v.Tags {
 		if aws.ToString(tag.Key) == "Name" { out.Name = aws.ToString(tag.Value) }
+		if aws.ToString(tag.Key) == "ManagedBy" { out.ManagedBy = aws.ToString(tag.Value) }
 	}
 	for _, group := range v.SecurityGroups { if aws.ToString(group.GroupId) != "" { out.SecurityGroups = append(out.SecurityGroups, aws.ToString(group.GroupId)) } }
 	if v.LaunchTime != nil { out.LaunchTime = v.LaunchTime.UTC() }

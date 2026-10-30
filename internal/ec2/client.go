@@ -41,7 +41,50 @@ type Instance struct {
 	Placement struct { AvailabilityZone string }
 }
 
-var regionPattern = regexp.MustCompile(`^[a-z]{2}(-gov)?-[a-z]+-[0-9]+$`)
+var regionPattern = regexp.MustCompile(`^[a-z]{2}(-[a-z0-9]+){1,2}-[0-9]+// Package ec2 provides an AWS SDK for Go v2 adapter for EC2 provisioning.
+package ec2
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+)
+
+type API interface {
+	RunInstances(context.Context, *ec2.RunInstancesInput, ...func(*ec2.Options)) (*ec2.RunInstancesOutput, error)
+	DescribeInstances(context.Context, *ec2.DescribeInstancesInput, ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
+	StartInstances(context.Context, *ec2.StartInstancesInput, ...func(*ec2.Options)) (*ec2.StartInstancesOutput, error)
+	StopInstances(context.Context, *ec2.StopInstancesInput, ...func(*ec2.Options)) (*ec2.StopInstancesOutput, error)
+}
+
+type Client struct {
+	Region string
+	API API // Optional injection point for tests; production uses the SDK credential chain.
+}
+
+type LaunchInput struct {
+	Name, Region, ImageID, InstanceType, SubnetID string
+	SecurityGroupIDs []string
+	KeyName, InstanceProfile, ClientToken string
+}
+
+type Instance struct {
+	ID string
+	Type string
+	State struct { Name string }
+	PublicIP string
+	PrivateIP string
+	Placement struct { AvailabilityZone string }
+}
+
+var regionPattern = )
 
 func (c Client) region(override string) string {
 	if v := strings.TrimSpace(override); v != "" { return v }

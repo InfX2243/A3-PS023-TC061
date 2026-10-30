@@ -43,6 +43,7 @@ button, input, select, textarea { font: inherit; }
 .sidebar-nav { gap:5px; }
 .nav-link { position:relative; display:flex; align-items:center; gap:12px; min-height:44px; padding:10px 12px; border:1px solid transparent; border-radius:10px; color:#aebbd0; font-size:12px; font-weight:570; transition:background .18s ease,color .18s ease,border-color .18s ease; }
 .nav-link .nav-icon { display:grid; place-items:center; width:22px; height:22px; flex:0 0 22px; border-radius:7px; background:rgba(255,255,255,.055); color:#9daac1; font-size:13px; }
+.nav-link .nav-icon svg { display:block; width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.65; stroke-linecap:round; stroke-linejoin:round; }
 .nav-link:hover { color:#fff; background:#12243c; border-color:#1c3150; }
 .nav-link.is-active { color:#fff; background:linear-gradient(100deg,rgba(99,88,245,.24),rgba(99,88,245,.09)); border-color:rgba(139,130,255,.25); box-shadow:inset 3px 0 #8177ff; }
 .nav-link.is-active .nav-icon { background:rgba(129,119,255,.2); color:#bdb8ff; }

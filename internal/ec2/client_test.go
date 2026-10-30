@@ -16,13 +16,14 @@ type fakeAPI struct {
 	runOut *ec2.RunInstancesOutput
 	describeOut *ec2.DescribeInstancesOutput
 	describeInputs []*ec2.DescribeInstancesInput
-	started, stopped []string
+	started, stopped, terminated []string
 	ingress *ec2.AuthorizeSecurityGroupIngressInput
 }
 func (f *fakeAPI) RunInstances(_ context.Context, in *ec2.RunInstancesInput, _ ...func(*ec2.Options)) (*ec2.RunInstancesOutput,error) { f.run=in; return f.runOut,nil }
 func (f *fakeAPI) DescribeInstances(_ context.Context, in *ec2.DescribeInstancesInput, _ ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput,error) { f.describeInputs=append(f.describeInputs,in); return f.describeOut,nil }
 func (f *fakeAPI) StartInstances(_ context.Context, in *ec2.StartInstancesInput, _ ...func(*ec2.Options)) (*ec2.StartInstancesOutput,error) { f.started=in.InstanceIds; return &ec2.StartInstancesOutput{},nil }
 func (f *fakeAPI) StopInstances(_ context.Context, in *ec2.StopInstancesInput, _ ...func(*ec2.Options)) (*ec2.StopInstancesOutput,error) { f.stopped=in.InstanceIds; return &ec2.StopInstancesOutput{},nil }
+func (f *fakeAPI) TerminateInstances(_ context.Context, in *ec2.TerminateInstancesInput, _ ...func(*ec2.Options)) (*ec2.TerminateInstancesOutput,error) { f.terminated=in.InstanceIds; return &ec2.TerminateInstancesOutput{},nil }
 func (f *fakeAPI) AuthorizeSecurityGroupIngress(_ context.Context, in *ec2.AuthorizeSecurityGroupIngressInput, _ ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupIngressOutput,error) { f.ingress=in; return &ec2.AuthorizeSecurityGroupIngressOutput{},nil }
 
 func TestValidID(t *testing.T) {

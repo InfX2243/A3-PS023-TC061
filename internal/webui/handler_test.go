@@ -428,7 +428,7 @@ func TestAWSPageShowsManagedInstanceInventoryAndIndependentScrollRegion(t *testi
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK { t.Fatalf("AWS page status=%d body=%s", response.Code, response.Body.String()) }
 	body := response.Body.String()
-	for _, expected := range []string{"Managed EC2 inventory", "aiori-worker", "i-node123", "203.0.113.8", "aws-table-scroll", "Inventory refreshes every 30 seconds"} {
+	for _, expected := range []string{"Managed EC2 inventory", "aiori-worker", "i-node123", "203.0.113.8", "aws-table-scroll", "Refresh inventory from AWS"} {
 		if !strings.Contains(body, expected) { t.Fatalf("AWS page omitted %q", expected) }
 	}
 }

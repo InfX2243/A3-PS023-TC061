@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -34,10 +35,18 @@ type LaunchInput struct {
 
 type Instance struct {
 	ID        string
+	Name      string
+	ImageID   string
 	Type      string
 	State     struct{ Name string }
+	StateReason string
 	PublicIP  string
 	PrivateIP string
+	VPCID     string
+	SubnetID  string
+	KeyName   string
+	LaunchTime time.Time
+	SecurityGroups []string
 	Placement struct{ AvailabilityZone string }
 }
 
@@ -166,6 +175,35 @@ func (c Client) Describe(ctx context.Context, region, id string) (Instance, erro
 	return Instance{}, errors.New("EC2 instance was not returned")
 }
 
+// ListManaged returns every instance tagged as managed by this controller in the
+// selected region. It deliberately does not list unrelated account resources.
+func (c Client) ListManaged(ctx context.Context, region string) ([]Instance, error) {
+	region = c.region(region)
+	if !regionPattern.MatchString(region) {
+		return nil, errors.New("a valid AWS region is required")
+	}
+	api, err := c.sdk(ctx, region)
+	if err != nil { return nil, err }
+	var result []Instance
+	var token *string
+	for {
+		out, err := api.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+			Filters: []types.Filter{{Name: aws.String("tag:ManagedBy"), Values: []string{"aiori-controller"}}},
+			NextToken: token,
+		})
+		if err != nil { return nil, fmt.Errorf("AWS EC2 ListManagedInstances: %w", err) }
+		if out == nil { break }
+		for _, reservation := range out.Reservations {
+			for _, raw := range reservation.Instances {
+				result = append(result, fromSDK(raw))
+			}
+		}
+		if aws.ToString(out.NextToken) == "" { break }
+		token = out.NextToken
+	}
+	return result, nil
+}
+
 func (c Client) Action(ctx context.Context, region, id, action string) error {
 	region = c.region(region)
 	if !regionPattern.MatchString(region) || !validID(id, "i-") {
@@ -192,6 +230,14 @@ func (c Client) Action(ctx context.Context, region, id, action string) error {
 func fromSDK(v types.Instance) Instance {
 	var out Instance
 	out.ID, out.Type = aws.ToString(v.InstanceId), string(v.InstanceType)
+	out.ImageID, out.KeyName = aws.ToString(v.ImageId), aws.ToString(v.KeyName)
+	out.VPCID, out.SubnetID = aws.ToString(v.VpcId), aws.ToString(v.SubnetId)
+	for _, tag := range v.Tags {
+		if aws.ToString(tag.Key) == "Name" { out.Name = aws.ToString(tag.Value) }
+	}
+	for _, group := range v.SecurityGroups { if aws.ToString(group.GroupId) != "" { out.SecurityGroups = append(out.SecurityGroups, aws.ToString(group.GroupId)) } }
+	if v.LaunchTime != nil { out.LaunchTime = v.LaunchTime.UTC() }
+	if v.StateReason != nil { out.StateReason = aws.ToString(v.StateReason.Message) }
 	if v.State != nil {
 		out.State.Name = string(v.State.Name)
 	}

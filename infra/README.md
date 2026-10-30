@@ -8,15 +8,15 @@ This directory is the infrastructure entry point for Aiori Compute. Deploy the s
 - An HTTPS Application Load Balancer in front of the controller. The controller security group accepts port 8080 only from the ALB security group.
 - A controller EC2 instance with IMDSv2 required, encrypted persistent gp3 root storage, and an instance profile.
 - A worker security group whose agent port 9090 is allowed only from the controller security group.
-- A worker IAM role/profile with narrowly scoped SSM access to the worker shared-secret parameter and the CloudWatch Agent managed policy.
-- Controller IAM permissions for EC2 lifecycle/provisioning, restricted PassRole to the worker role, SSM secret setup, and CloudWatch read operations.
-- CloudWatch log groups and a CloudWatch dashboard resource.
+- A worker IAM role/profile with narrowly scoped SSM access to the worker shared-secret parameter; no CloudWatch permissions are required.
+- Controller IAM permissions for EC2 lifecycle/provisioning, restricted PassRole to the worker role, and SSM secret setup.
+- Platform-native telemetry ingestion; EC2 workers push CPU, memory, root-disk, and network counters to the controller over authenticated HTTPS.
 
 The worker-agent port is never opened to the public internet. The ALB is the only public ingress path; restrict its CIDR to your trusted office/VPN range.
 
 ## Prerequisites
 
-1. Choose an AWS region and ensure EC2, ALB, ACM, SSM Parameter Store, and CloudWatch are available there.
+1. Choose an AWS region and ensure EC2, ALB, ACM, and SSM Parameter Store are available there.
 2. Register a domain name and create an ACM certificate in the same region. Complete DNS validation before deployment.
 3. Create a DNS record for the chosen hostname pointing to the ALB DNS name returned by the stack.
 4. Publish an immutable Linux amd64 controller binary over HTTPS and calculate its SHA-256:
@@ -73,6 +73,6 @@ Retrieve the initial operator credentials (use a secure terminal and do not past
 - The generated operator password and token are written as separate SSM SecureString parameters. Retrieve them only from an authorized workstation and keep them out of shell history and source control:
 - Controller and worker IAM roles are attached to EC2; do not add long-lived AWS access keys to `.env`.
 - IMDSv2 is required on the controller. Keep the worker-agent security group source restricted to the controller security group.
-- CloudWatch dashboard and log groups are provisioned by the template. EC2 basic CPU/network/disk-I/O metrics are available automatically; memory and filesystem metrics require the CloudWatch Agent to be installed and configured on each host.
-- CloudWatch ingestion, ALB hours, EC2, EBS, and public IPv4 addresses incur AWS charges. Delete the stack when finished testing, after backing up the controller database and reviewing retained EBS volumes.
+- Worker telemetry is collected by a small systemd-managed Python collector and stored in the controller's in-memory 24-hour sample window. The dashboard charts are served by the authenticated platform UI; restarting the controller clears the current telemetry history.
+- ALB hours, EC2, EBS, and public IPv4 addresses incur AWS charges. Delete the stack when finished testing, after backing up the controller database and reviewing retained EBS volumes.
 - The template is a starting point for a hackathon deployment, not a hardened multi-account production landing zone. Review CIDRs, IAM, TLS, backups, retention, and network egress before production use.

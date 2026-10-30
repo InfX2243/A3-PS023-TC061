@@ -8,7 +8,7 @@ This directory is the infrastructure entry point for Aiori Compute. Deploy the s
 - An HTTPS Application Load Balancer in front of the controller. The controller security group accepts port 8080 only from the ALB security group.
 - A controller EC2 instance with IMDSv2 required, encrypted persistent gp3 root storage, and an instance profile.
 - A worker security group whose agent port 9090 is allowed only from the controller security group.
-- A worker IAM role/profile with narrowly scoped SSM access to the worker shared-secret parameter; no CloudWatch permissions are required.
+- A worker IAM role/profile with narrowly scoped SSM access to the worker shared-secret parameter; it needs no AWS metrics or logging permissions.
 - Controller IAM permissions for EC2 lifecycle/provisioning, restricted PassRole to the worker role, and SSM secret setup.
 - Platform-native telemetry ingestion; EC2 workers push CPU, memory, root-disk, and network counters to the controller over authenticated HTTPS.
 

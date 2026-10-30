@@ -236,9 +236,10 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - [x] Restrict worker-agent ingress to the controller security group; reject public IP endpoints during auto-enrollment.
 - [x] Show generated user data and distinguish EC2 lifecycle from agent heartbeat/hypervisor health in the UI.
 - [ ] Verify cloud-init on a real Linux AMI, SSM permissions, same-VPC security-group behavior, agent heartbeat, and KVM/Cloud Hypervisor readiness.
-- [ ] Add/verify a KVM-capable EC2 launch profile with nested virtualization enabled; the current t3 profiles remain connectivity/bootstrap tests only.
+- [x] Add a c8i.xlarge launch profile that explicitly requests `CpuOptions.NestedVirtualization=enabled`; retain t3 profiles as connectivity/bootstrap tests only.
+- [ ] Verify the launched c8i.xlarge actually exposes `/dev/kvm` and passes a real guest boot/stop cycle.
 - Acceptance: a launched supported worker installs the pinned agent/artifacts, auto-enrolls, reports healthy only after the KVM/VMM probe, and accepts authenticated controller VM lifecycle calls over a private path.
-- Status: **software path implemented behind explicit bootstrap configuration; real artifact publication, SSM/IAM setup, controller network deployment, and KVM-capable nested-virtualization launch validation remain deployment gates**.
+- Status: **software path and c8i nested-virtualization API request implemented behind explicit bootstrap configuration; real artifact publication, SSM/IAM setup, controller network deployment, and runtime KVM/guest validation remain deployment gates**.
 - Depends on: T-01, T-18, T-19.
 
 ## Definition of done for every task

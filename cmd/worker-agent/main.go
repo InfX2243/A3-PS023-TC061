@@ -141,6 +141,15 @@ func loadConfig(path string) (fileConfig, error) {
 			return fileConfig{}, errors.New("controller_heartbeat_url must be an absolute http(s) URL without credentials, query, or fragment")
 		}
 	}
+	if cfg.ControllerHeartbeatURL != "" && strings.TrimSpace(cfg.WorkerEndpoint) == "" {
+		return fileConfig{}, errors.New("worker_endpoint is required when controller_heartbeat_url is configured")
+	}
+	if cfg.WorkerEndpoint != "" {
+		u, err := url.Parse(cfg.WorkerEndpoint)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return fileConfig{}, errors.New("worker_endpoint must be an absolute http(s) URL without credentials, query, or fragment")
+		}
+	}
 	return cfg, nil
 }
 

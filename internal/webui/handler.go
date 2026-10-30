@@ -72,6 +72,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /docs", h.docsPage)
 	mux.HandleFunc("GET /docs/", h.docsPage)
 	mux.HandleFunc("GET /assets/ui.js", h.uiScript)
+	mux.HandleFunc("GET /assets/ui.css", h.uiStylesheet)
 	mux.HandleFunc("GET /login", h.loginPage)
 	mux.HandleFunc("POST /login", h.login)
 	mux.HandleFunc("POST /logout", h.logout)
@@ -403,9 +404,17 @@ func (h *Handler) headers(w http.ResponseWriter) {
 
 func (h *Handler) render(w http.ResponseWriter, page string, data any) { h.renderStatus(w, http.StatusOK, page, data) }
 func (h *Handler) renderStatus(w http.ResponseWriter, status int, page string, data any) {
+	var output strings.Builder
+	if err := h.templates.ExecuteTemplate(&output, page, data); err != nil {
+		http.Error(w, "page rendering failed", http.StatusInternalServerError)
+		return
+	}
+	// Keep the existing server-rendered templates intact while applying one
+	// shared design system to every public and authenticated page.
+	html := strings.Replace(output.String(), "</head>", `<link rel="stylesheet" href="/assets/ui.css"></head>`, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if err := h.templates.ExecuteTemplate(w, page, data); err != nil { return }
+	_, _ = w.Write([]byte(html))
 }
 
 func newFormID() string {

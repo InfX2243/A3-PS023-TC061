@@ -322,6 +322,7 @@ Resources:
           VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID=${WorkerSecurityGroup}
           VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE=${WorkerInstanceProfile}
           VM_CONTROLLER_DEFAULT_IMAGE_ID=${Ubuntu2404AMI}
+          VM_CONTROLLER_CLOUDWATCH_DASHBOARD_URL=https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-AIORI-Compute
           EOF
           unset OPERATOR_TOKEN
           chmod 0600 /etc/aiori/controller.env /etc/aiori/config.json

@@ -21,13 +21,13 @@ Grant least-privilege permissions for `ec2:RunInstances`, `ec2:DescribeInstances
 
 ## Console launch requirements
 
-Provide a region, approved AMI ID, subnet ID, one or more existing security-group IDs, a name, and either `t3.micro` or `t3.small`. The controller deliberately does not create or modify security groups. Configure inbound rules before launch: allow the worker-agent port only from the controller's fixed source address/security group; allow SSH only from a trusted admin CIDR if required. Never use `0.0.0.0/0` for SSH or the agent API.
+Provide a region, approved AMI ID, name, and either `t3.micro` or `t3.small`. Subnet and security-group IDs are optional. When omitted, EC2 selects the default subnet and default security group in the account default VPC. This avoids entering network IDs, but does not configure inbound connectivity: the default security group blocks inbound traffic from arbitrary hosts.
 
 The launch request always sets MinCount=1 and MaxCount=1, applies managed tags, and supplies a stable client token for idempotency. SDK calls use the incoming HTTP request context, so client cancellation and server deadlines are propagated.
 
 ## Scope and lifecycle
 
-The initial integration creates a tagged EC2 instance only. It does not install a worker agent, register a worker, or claim that the instance is compute-ready. Install the agent using the deployment procedure and register it separately after network reachability and KVM capability are verified. A `t3.micro` is a controller/connectivity test profile, not a KVM/Cloud Hypervisor host.
+The current integration creates a tagged EC2 instance only. It does not yet install a worker agent or register a worker. A `t3.micro` is a controller/connectivity test profile, not a KVM/Cloud Hypervisor host.
 
 EC2 lifecycle status is read from EC2, not inferred from worker heartbeat. Start and stop are explicit SDK operations. Termination is intentionally not exposed in the controller workflow; terminate instances through a separately reviewed AWS operation. Removing a worker registration never changes EC2 resources.
 

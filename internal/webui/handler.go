@@ -180,7 +180,7 @@ func (h *Handler) instanceMetrics(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"instance_id": id, "samples": h.metricsStore.List(id, since)})
 }
 type ec2InventoryRow struct { Instance ec2.Instance; Worker domain.Worker; HasWorker bool }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey, DashboardURL string; DefaultAMI, DefaultSubnet, DefaultWorkerSecurityGroup, DefaultWorkerInstanceProfile string }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string; DefaultAMI, DefaultSubnet, DefaultWorkerSecurityGroup, DefaultWorkerInstanceProfile string }
 
 func (h *Handler) ec2InstancePage(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
@@ -197,7 +197,7 @@ func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
 	region := r.URL.Query().Get("region")
 	if region == "" { region = os.Getenv("AWS_REGION"); if region == "" { region = os.Getenv("AWS_DEFAULT_REGION") } }
-	dashboardRegion := region; if dashboardRegion == "" { dashboardRegion = "us-east-1" }; data := awsPageData{Region: region, DefaultAMI: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_AMI_ID"), DefaultSubnet: os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID"), DefaultWorkerSecurityGroup: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID"), DefaultWorkerInstanceProfile: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE"), DashboardURL: "https://" + dashboardRegion + ".console.aws.amazon.com/cloudwatch/home?region=" + dashboardRegion + "#dashboards:name=Aiori-Compute", Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
+	data := awsPageData{Region: region, DefaultAMI: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_AMI_ID"), DefaultSubnet: os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID"), DefaultWorkerSecurityGroup: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID"), DefaultWorkerInstanceProfile: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE"), Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
 	workersByID := make(map[string]domain.Worker)
 	if h.service != nil {
 		workers, err := h.service.ListWorkers(r.Context())

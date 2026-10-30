@@ -36,7 +36,7 @@ Parameters:
     AllowedPattern: '[A-Fa-f0-9]{64}'
   WorkerAmi:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
   ControllerInstanceType:
     Type: String
     Default: t3.small

@@ -445,6 +445,37 @@
     updateScrollUI();
   }
 
+
+  function initAWSInventoryInteractions() {
+    var page = document.querySelector(".aws-page");
+    if (!page) return;
+    var search = page.querySelector("[data-aws-search]");
+    var filter = page.querySelector("[data-aws-state-filter]");
+    var rows = Array.prototype.slice.call(page.querySelectorAll("[data-aws-row]"));
+    var count = page.querySelector("[data-aws-visible-count]");
+    var empty = page.querySelector("[data-aws-no-results]");
+    function applyFilters() {
+      var query = (search ? search.value : "").trim().toLowerCase();
+      var state = filter ? filter.value : "all";
+      var visible = 0;
+      rows.forEach(function (row) {
+        var show = (!query || row.textContent.toLowerCase().indexOf(query) !== -1) &&
+          (state === "all" || row.getAttribute("data-aws-state") === state);
+        row.hidden = !show;
+        if (show) visible++;
+      });
+      if (count) count.textContent = String(visible);
+      if (empty) empty.hidden = visible !== 0 || rows.length === 0;
+    }
+    if (search) search.addEventListener("input", applyFilters);
+    if (filter) filter.addEventListener("change", applyFilters);
+    page.addEventListener("submit", function (event) {
+      var message = event.target && event.target.getAttribute && event.target.getAttribute("data-aws-confirm");
+      if (message && !window.confirm(message)) event.preventDefault();
+    });
+    applyFilters();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initDocsNavigation();
     initDocsInteractions();
@@ -458,6 +489,7 @@
     initPrepareVMInteractions();
     initWorkerInventoryInteractions();
     initVMInventoryInteractions();
+    initAWSInventoryInteractions();
   });
 }());
 

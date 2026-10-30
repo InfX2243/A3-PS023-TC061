@@ -52,6 +52,7 @@ type dashboardData struct { Workers []domain.Worker; VMs []vmRow; Error string; 
 type formData struct { Limits Limits; Error string; IdempotencyKey string; CSRFToken string }
 type workerPageData struct { Workers []domain.Worker; Error string; Notice string; CSRFToken string }
 type ec2Provisioner interface { Launch(context.Context, ec2.LaunchInput) (ec2.Instance,error); Describe(context.Context,string,string) (ec2.Instance,error); Action(context.Context,string,string,string) error }
+type ec2InventoryProvisioner interface { ListManaged(context.Context, string) ([]ec2.Instance, error) }
 type workerManagementService interface {
 	RegisterWorker(context.Context, string, string, string, uint64) error
 	DeleteWorker(context.Context, string) error
@@ -154,15 +155,26 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Region, Error, Notice, CSRFToken, IdempotencyKey string }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Instances []ec2.Instance; InventoryError string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
 
-func (h *Handler) awsPage(w http.ResponseWriter,r *http.Request) {
- h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
- region:=r.URL.Query().Get("region"); if region=="" { region=os.Getenv("AWS_REGION"); if region=="" { region=os.Getenv("AWS_DEFAULT_REGION") } }
- data:=awsPageData{Region:region,Notice:r.URL.Query().Get("notice"),Error:r.URL.Query().Get("error"),CSRFToken:h.csrfToken(r),IdempotencyKey:newFormID()}
- if id:=r.URL.Query().Get("instance_id"); id!="" { if h.ec2Client==nil { data.Error="EC2 provisioning is not configured." } else if instance,err:=h.ec2Client.Describe(r.Context(),data.Region,id); err!=nil { data.Error="Could not read EC2 lifecycle state: "+err.Error() } else { data.Instance=instance; data.HasInstance=true } }
- if h.ec2Client==nil && data.Error=="" { data.Error="EC2 provisioning is unavailable. Configure AWS_REGION and the AWS SDK credential chain on the controller." }
- h.render(w,"aws",data)
+func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
+	h.headers(w)
+	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
+	region := r.URL.Query().Get("region")
+	if region == "" { region = os.Getenv("AWS_REGION"); if region == "" { region = os.Getenv("AWS_DEFAULT_REGION") } }
+	data := awsPageData{Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2.Instance{}}
+	if h.ec2Client == nil {
+		if data.Error == "" { data.Error = "EC2 provisioning is unavailable. Configure AWS_REGION and the AWS SDK credential chain on the controller." }
+	} else if inventory, ok := h.ec2Client.(ec2InventoryProvisioner); ok {
+		instances, err := inventory.ListManaged(r.Context(), data.Region)
+		if err != nil { data.InventoryError = "Could not load managed EC2 inventory: " + err.Error() } else { data.Instances = instances }
+	} else {
+		data.InventoryError = "The configured EC2 provider does not support instance inventory."
+	}
+	if id := r.URL.Query().Get("instance_id"); id != "" {
+		if h.ec2Client == nil { data.Error = "EC2 provisioning is not configured." } else if instance, err := h.ec2Client.Describe(r.Context(), data.Region, id); err != nil { data.Error = "Could not read EC2 lifecycle state: " + err.Error() } else { data.Instance = instance; data.HasInstance = true }
+	}
+	h.render(w, "aws", data)
 }
 
 func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {

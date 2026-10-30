@@ -161,7 +161,7 @@ func (h *Handler) awsPage(w http.ResponseWriter,r *http.Request) {
  region:=r.URL.Query().Get("region"); if region=="" { region=os.Getenv("AWS_REGION"); if region=="" { region=os.Getenv("AWS_DEFAULT_REGION") } }
  data:=awsPageData{Region:region,Notice:r.URL.Query().Get("notice"),Error:r.URL.Query().Get("error"),CSRFToken:h.csrfToken(r),IdempotencyKey:newFormID()}
  if id:=r.URL.Query().Get("instance_id"); id!="" { if h.ec2Client==nil { data.Error="EC2 provisioning is not configured." } else if instance,err:=h.ec2Client.Describe(r.Context(),data.Region,id); err!=nil { data.Error="Could not read EC2 lifecycle state: "+err.Error() } else { data.Instance=instance; data.HasInstance=true } }
- if h.ec2Client==nil && data.Error=="" { data.Error="EC2 provisioning is unavailable. Install AWS CLI and configure controller credentials." }
+ if h.ec2Client==nil && data.Error=="" { data.Error="EC2 provisioning is unavailable. Configure AWS_REGION and the AWS SDK credential chain on the controller." }
  h.render(w,"aws",data)
 }
 

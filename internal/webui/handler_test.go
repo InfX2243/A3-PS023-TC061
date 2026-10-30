@@ -450,8 +450,10 @@ func TestSharedDesignSystemStylesheetIsServedAndApplied(t *testing.T) {
 		}
 	}
 
+	loginRequest := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	loginRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	login := httptest.NewRecorder()
-	handler.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret")))
+	handler.ServeHTTP(login, loginRequest)
 	if login.Code != http.StatusSeeOther {
 		t.Fatalf("test login status = %d", login.Code)
 	}

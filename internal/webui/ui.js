@@ -60,6 +60,21 @@
     });
   }
 
+  function initLoginInteractions() {
+    document.querySelectorAll("[data-password-toggle]").forEach(function (toggle) {
+      var input = document.getElementById(toggle.getAttribute("data-password-toggle"));
+      if (!input) return;
+      toggle.addEventListener("click", function () {
+        var reveal = input.type === "password";
+        input.type = reveal ? "text" : "password";
+        toggle.textContent = reveal ? "Hide" : "Show";
+        toggle.setAttribute("aria-pressed", String(reveal));
+        toggle.setAttribute("aria-label", (reveal ? "Hide " : "Show ") + (input.id === "token" ? "access token" : "password"));
+        input.focus();
+      });
+    });
+  }
+
   function initFormFeedback() {
     document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function (form) {
       form.addEventListener("submit", function () {
@@ -311,4 +326,5 @@
     initLandingPreviewTabs();
     initLandingMotion();
   });
-}());
+}());  document.addEventListener("DOMContentLoaded", function () { initLoginInteractions(); });
+

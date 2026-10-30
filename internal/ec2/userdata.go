@@ -161,6 +161,8 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/var/lib/aiori-worker /run
 PrivateTmp=true
+StandardOutput=append:/var/log/aiori-worker-agent.log
+StandardError=append:/var/log/aiori-worker-agent.log
 [Install]
 WantedBy=multi-user.target
 EOF

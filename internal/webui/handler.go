@@ -230,33 +230,77 @@ func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 		bootstrap.NodeName = strings.TrimSpace(r.URL.Query().Get("name"))
 		if data.HasInstance && data.Instance.Name != "" { bootstrap.NodeName = data.Instance.Name }
 		if bootstrap.NodeName == "" { bootstrap.NodeName = "aiori-worker-test" }
-		if script, err := bootstrap.BuildUserData(); err == nil { data.UserData = script } else { data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error() }
+		if script, err := bootstrap.BuildUserData(); err == nil {
+			data.UserData = script
+		} else {
+			data.BootstrapEnabled = false
+			data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error()
+		}
+	} else {
+		data.InventoryError = "Worker bootstrap is not configured. EC2 worker launches are disabled until controller URL, verified agent/hypervisor/disk artifacts, checksums, SSM secret parameter, and worker image ID are configured."
 	}
 	h.render(w, "aws", data)
 }
-func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
- h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
- r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token or form",http.StatusForbidden); return }
- if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
- if !safeFormID(r.FormValue("client_token")) { http.Error(w,"invalid launch token; reload the form",http.StatusBadRequest); return }
- groups:=strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"),","," "))
- in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile")),ClientToken:r.FormValue("client_token")}
- if h.ec2Bootstrap.Enabled() { if in.InstanceProfile == "" { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap requires an EC2 instance profile with ssm:GetParameter permission for the configured SecureString parameter.")+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; bootstrap := h.ec2Bootstrap; bootstrap.NodeName = in.Name; userData, err := bootstrap.BuildUserData(); if err != nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap configuration is invalid: "+err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; in.UserData = userData }
- instance,err:=h.ec2Client.Launch(r.Context(),in); if err!=nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape(err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }
- notice := "EC2 launch accepted without worker-agent bootstrap; this instance is not an enrolled worker."
- if h.ec2Bootstrap.Enabled() {
-   if h.ec2Bootstrap.ControllerSecurityGroupID == "" {
-     notice = "EC2 launch accepted with checksum-verified bootstrap and outbound platform telemetry. No controller security-group rule was added; ngrok supports worker-to-controller metrics uploads, but controller-to-worker VM RPC requires a private VPC path."
-   } else {
-     ingress, ok := h.ec2Client.(ec2IngressProvisioner)
-     if !ok { http.Redirect(w,r,"/aws/instances/"+url.QueryEscape(instance.ID)+"?region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched, but the provider cannot configure private worker-agent ingress."),http.StatusSeeOther); return }
-     if err := ingress.AllowControllerIngress(r.Context(), in.Region, instance.SecurityGroups, h.ec2Bootstrap.ControllerSecurityGroupID, h.ec2Bootstrap.AgentPort); err != nil {
-       http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched with user data, but controller-to-worker network access could not be configured: "+err.Error()),http.StatusSeeOther); return
-     }
-     notice = "EC2 launch accepted with checksum-verified worker bootstrap and private controller-only agent ingress. Wait for cloud-init and the first authenticated heartbeat; agent health is shown separately in Worker inventory."
-   }
- }
- http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape(notice),http.StatusSeeOther)
+func (h *Handler) launchEC2(w http.ResponseWriter, r *http.Request) {
+	h.headers(w)
+	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	if err := r.ParseForm(); err != nil || !h.verifyCSRF(r) { http.Error(w, "invalid request token or form", http.StatusForbidden); return }
+	if h.ec2Client == nil { http.Error(w, "EC2 provisioning unavailable", http.StatusServiceUnavailable); return }
+	if !safeFormID(r.FormValue("client_token")) { http.Error(w, "invalid launch token; reload the form", http.StatusBadRequest); return }
+
+	region := strings.TrimSpace(r.FormValue("region"))
+	fail := func(message string) {
+		http.Redirect(w, r, "/aws?error="+url.QueryEscape(message)+"&region="+url.QueryEscape(region), http.StatusSeeOther)
+	}
+	if !h.ec2Bootstrap.Enabled() {
+		fail("EC2 worker launch blocked: bootstrap is not configured. Set VM_CONTROLLER_PUBLIC_URL, all verified worker artifact URLs and SHA-256 checksums, VM_CONTROLLER_WORKER_SECRET_PARAMETER, and VM_CONTROLLER_WORKER_IMAGE_ID; then restart the controller.")
+		return
+	}
+	groups := strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"), ",", " "))
+	in := ec2.LaunchInput{
+		Name: strings.TrimSpace(r.FormValue("name")), Region: region,
+		ImageID: strings.TrimSpace(r.FormValue("image_id")), InstanceType: r.FormValue("instance_type"),
+		SubnetID: strings.TrimSpace(r.FormValue("subnet_id")), SecurityGroupIDs: groups,
+		KeyName: strings.TrimSpace(r.FormValue("key_name")),
+		InstanceProfile: strings.TrimSpace(r.FormValue("instance_profile")),
+		ClientToken: r.FormValue("client_token"),
+	}
+	if in.InstanceProfile == "" {
+		fail("EC2 worker launch blocked: provide VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE or an instance profile with ssm:GetParameter access to the configured worker secret.")
+		return
+	}
+	bootstrap := h.ec2Bootstrap
+	bootstrap.NodeName = in.Name
+	userData, err := bootstrap.BuildUserData()
+	if err != nil {
+		fail("EC2 worker launch blocked: invalid bootstrap configuration: " + err.Error())
+		return
+	}
+	if strings.TrimSpace(userData) == "" || !strings.HasPrefix(userData, "#!/bin/bash") {
+		http.Error(w, "EC2 worker launch blocked: generated user data is empty or invalid", http.StatusInternalServerError)
+		return
+	}
+	in.UserData = userData
+	instance, err := h.ec2Client.Launch(r.Context(), in)
+	if err != nil { fail(err.Error()); return }
+
+	notice := "EC2 launch accepted with checksum-verified worker bootstrap. Wait for cloud-init and the first authenticated heartbeat; confirm enrollment in Worker inventory."
+	if bootstrap.ControllerSecurityGroupID != "" {
+		ingress, ok := h.ec2Client.(ec2IngressProvisioner)
+		if !ok {
+			http.Redirect(w, r, "/aws/instances/"+url.QueryEscape(instance.ID)+"?region="+url.QueryEscape(region)+"&error="+url.QueryEscape("Instance launched with user data, but the provider cannot configure private worker-agent ingress."), http.StatusSeeOther)
+			return
+		}
+		if err := ingress.AllowControllerIngress(r.Context(), region, instance.SecurityGroups, bootstrap.ControllerSecurityGroupID, bootstrap.AgentPort); err != nil {
+			http.Redirect(w, r, "/aws/instances/"+url.QueryEscape(instance.ID)+"?region="+url.QueryEscape(region)+"&error="+url.QueryEscape("Instance launched with user data, but controller-to-worker network access could not be configured: "+err.Error()), http.StatusSeeOther)
+			return
+		}
+		notice += " Private worker-agent ingress is restricted to the configured controller security group."
+	} else {
+		notice += " Outbound heartbeat and telemetry work through ngrok; controller-to-worker VM RPC still requires a private VPC path."
+	}
+	http.Redirect(w, r, "/aws/instances/"+url.QueryEscape(instance.ID)+"?region="+url.QueryEscape(region)+"&notice="+url.QueryEscape(notice), http.StatusSeeOther)
 }
 
 func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {

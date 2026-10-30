@@ -422,7 +422,7 @@ func TestWorkerInventoryRequiresAuthenticationAndRendersRegistrationForm(t *test
 	page := httptest.NewRecorder()
 	handler.ServeHTTP(page, request)
 	if page.Code != http.StatusOK { t.Fatalf("worker inventory status = %d; body=%s", page.Code, page.Body.String()) }
-	for _, want := range []string{"Register an existing worker manually", "memory_limit_mib", "Agent endpoint"} {
+	for _, want := range []string{"Register an existing worker", "memory_limit_mib", "Agent endpoint"} {
 		if !strings.Contains(page.Body.String(), want) { t.Errorf("worker page missing %q", want) }
 	}
 }

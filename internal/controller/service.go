@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -138,8 +139,8 @@ func validateAutoEnrollmentEndpoint(raw string) error {
 	}
 	port := u.Port()
 	if port == "" { return errors.New("endpoint must include an explicit port") }
-	var portNumber int
-	if _, err := fmt.Sscanf(port, "%d", &portNumber); err != nil || portNumber < 1024 || portNumber > 65535 {
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1024 || portNumber > 65535 {
 		return errors.New("endpoint port must be between 1024 and 65535")
 	}
 	return nil

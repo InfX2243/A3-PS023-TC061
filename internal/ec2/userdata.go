@@ -18,8 +18,6 @@ type BootstrapConfig struct {
 	WorkerAgentSHA256 string
 	CloudHypervisorURL string
 	CloudHypervisorSHA256 string
-	KernelURL string
-	KernelSHA256 string
 	DiskURL string
 	DiskSHA256 string
 	SecretParameter string
@@ -40,8 +38,6 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 		WorkerAgentSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_AGENT_SHA256")),
 		CloudHypervisorURL: strings.TrimSpace(getenv("VM_CONTROLLER_CLOUD_HYPERVISOR_URL")),
 		CloudHypervisorSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_CLOUD_HYPERVISOR_SHA256")),
-		KernelURL: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_KERNEL_URL")),
-		KernelSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_KERNEL_SHA256")),
 		DiskURL: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_URL")),
 		DiskSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_SHA256")),
 		SecretParameter: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_SECRET_PARAMETER")),
@@ -57,7 +53,6 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 func (b BootstrapConfig) Enabled() bool {
 	return b.ControllerURL != "" && b.WorkerAgentURL != "" && b.WorkerAgentSHA256 != "" &&
 		b.CloudHypervisorURL != "" && b.CloudHypervisorSHA256 != "" &&
-		b.KernelURL != "" && b.KernelSHA256 != "" &&
 		b.DiskURL != "" && b.DiskSHA256 != "" && b.SecretParameter != "" && b.ControllerSecurityGroupID != "" && b.ImageID != ""
 }
 
@@ -67,7 +62,6 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 		"controller URL": b.ControllerURL,
 		"worker agent URL": b.WorkerAgentURL,
 		"Cloud Hypervisor URL": b.CloudHypervisorURL,
-		"kernel URL": b.KernelURL,
 		"disk URL": b.DiskURL,
 	} {
 		u, err := url.Parse(raw)
@@ -101,18 +95,17 @@ set -Eeuo pipefail
 exec > >(tee -a /var/log/aiori-worker-bootstrap.log | logger -t aiori-worker-bootstrap -s 2>/dev/console) 2>&1
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y awscli ca-certificates curl
+apt-get install -y awscli ca-certificates curl ovmf
 install -d -m 0755 /opt/aiori /etc/aiori /var/lib/aiori-worker/runtime /var/lib/aiori-worker/images
 download_verified() {
-  local url="$1" destination="$2" checksum="$3"
+  local url="$1" destination="$2" checksum="$3" mode="$4"
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 "$url" -o "$destination"
   echo "$checksum  $destination" | sha256sum --check --status
-  chmod 0755 "$destination"
+  chmod "$mode" "$destination"
 }
-download_verified %s /usr/local/bin/worker-agent %s
-download_verified %s /usr/local/bin/cloud-hypervisor %s
-download_verified %s /var/lib/aiori-worker/images/vmlinuz %s
-download_verified %s /var/lib/aiori-worker/images/worker.img %s
+download_verified %s /usr/local/bin/worker-agent %s 0755
+download_verified %s /usr/local/bin/cloud-hypervisor %s 0755
+download_verified %s /var/lib/aiori-worker/images/worker.img %s 0644
 TOKEN=$(curl --fail --silent --show-error -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' http://169.254.169.254/latest/api/token)
 IMDS='http://169.254.169.254/latest/meta-data'
 INSTANCE_ID=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$IMDS/instance-id")
@@ -140,9 +133,8 @@ cat > /etc/aiori/worker.json <<EOF
   "heartbeat_interval_seconds": 10,
   "images": [{
     "id": "%s",
-    "kernel_path": "/var/lib/aiori-worker/images/vmlinuz",
-    "disk_path": "/var/lib/aiori-worker/images/worker.img",
-    "cmdline": "console=ttyS0 root=/dev/vda1 rw"
+    "firmware_path": "/usr/share/OVMF/OVMF_CODE.fd",
+    "disk_path": "/var/lib/aiori-worker/images/worker.img"
   }]
 }
 EOF
@@ -171,7 +163,6 @@ systemctl enable --now aiori-worker-agent
 `,
 		shellQuote(b.WorkerAgentURL), shellQuote(strings.ToLower(b.WorkerAgentSHA256)),
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),
-		shellQuote(b.KernelURL), shellQuote(strings.ToLower(b.KernelSHA256)),
 		shellQuote(b.DiskURL), shellQuote(strings.ToLower(b.DiskSHA256)),
 		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID), nil
 }

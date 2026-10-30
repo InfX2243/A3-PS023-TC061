@@ -29,12 +29,13 @@ func TestValidID(t *testing.T) {
 func TestLaunchUsesSDKAndCreatesExactlyOneTaggedInstance(t *testing.T) {
 	f:=&fakeAPI{runOut:&ec2.RunInstancesOutput{Instances:[]types.Instance{{InstanceId:aws.String("i-abc123"),InstanceType:types.InstanceTypeT3Micro,State:&types.InstanceState{Name:types.InstanceStateNamePending}}}}}
 	c:=Client{Region:"ap-south-1",API:f}
-	got,err:=c.Launch(context.Background(),LaunchInput{Name:"demo-worker",ImageID:"ami-123",InstanceType:"t3.micro",SubnetID:"subnet-123",SecurityGroupIDs:[]string{"sg-123"},ClientToken:"stable-token"})
+	got,err:=c.Launch(context.Background(),LaunchInput{Name:"demo-worker",ImageID:"ami-123",InstanceType:"t3.micro",ClientToken:"stable-token"})
 	if err!=nil { t.Fatal(err) }
 	if got.ID!="i-abc123" || got.State.Name!="pending" { t.Fatalf("unexpected instance: %#v",got) }
 	if aws.ToInt32(f.run.MinCount)!=1 || aws.ToInt32(f.run.MaxCount)!=1 || aws.ToString(f.run.ClientToken)!="stable-token" { t.Fatal("launch was not constrained to one idempotent instance") }
 	if len(f.run.TagSpecifications)!=1 || len(f.run.TagSpecifications[0].Tags)!=3 { t.Fatal("expected managed instance tags") }
 	if f.run.IamInstanceProfile!=nil { t.Fatal("unexpected instance profile") }
+	if f.run.SubnetId != nil || len(f.run.SecurityGroupIds) != 0 { t.Fatal("expected default VPC networking") }
 }
 
 func TestLaunchRejectsUnsafeInputBeforeCallingAWS(t *testing.T) {
@@ -46,6 +47,7 @@ func TestLaunchRejectsUnsafeInputBeforeCallingAWS(t *testing.T) {
 		{"missing client token",func(v *LaunchInput){v.ClientToken=""}},
 		{"invalid security group",func(v *LaunchInput){v.SecurityGroupIDs=[]string{"sg-bad/evil"}}},
 		{"invalid AMI",func(v *LaunchInput){v.ImageID="ami-;touch"}},
+		{"invalid subnet",func(v *LaunchInput){v.SubnetID="subnet-bad/evil"}},
 		{"unsafe name",func(v *LaunchInput){v.Name="node;bad"}},
 	}
 	for _,tc:=range cases { t.Run(tc.name,func(t *testing.T){ in:=base; tc.mutate(&in); if _,err:=c.Launch(context.Background(),in);err==nil { t.Fatal("expected validation error") }; if f.run!=nil { t.Fatal("AWS API called for invalid input") } }) }

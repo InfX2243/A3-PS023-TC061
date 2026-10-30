@@ -417,7 +417,7 @@ func TestAWSPageShowsManagedInstanceInventoryAndIndependentScrollRegion(t *testi
 	h.SetEC2Provisioner(&fakeEC2Inventory{instances: []ec2.Instance{{
 		ID: "i-node123", Name: "aiori-worker", Type: "t3.micro", PublicIP: "203.0.113.8", PrivateIP: "10.0.0.8",
 		State: struct{ Name string }{Name: "running"},
-	}}})
+	}, {ID: "worker-a", Name: "Registered worker", Type: "t3.small", State: struct{ Name string }{Name: "running"}}}})
 	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
 	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	loginResponse := httptest.NewRecorder()
@@ -428,7 +428,7 @@ func TestAWSPageShowsManagedInstanceInventoryAndIndependentScrollRegion(t *testi
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK { t.Fatalf("AWS page status=%d body=%s", response.Code, response.Body.String()) }
 	body := response.Body.String()
-	for _, expected := range []string{"Managed EC2 inventory", "aiori-worker", "i-node123", "203.0.113.8", "aws-table-scroll", "Refresh inventory from AWS"} {
+	for _, expected := range []string{"Managed EC2 inventory", "aiori-worker", "i-node123", "203.0.113.8", "Registered worker", "healthy", "aws-table-scroll", "Refresh inventory from AWS"} {
 		if !strings.Contains(body, expected) { t.Fatalf("AWS page omitted %q", expected) }
 	}
 }

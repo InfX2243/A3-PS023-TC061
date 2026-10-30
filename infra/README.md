@@ -21,7 +21,6 @@ The controller instance is public so the operator can reach the initial console.
 4. Supply:
    - Stack name, e.g. `aiori-dev`.
    - `AdminCIDR`: your current public IPv4 address with `/32` (do not use `0.0.0.0/0`).
-   - `KeyName` is optional; SSM is the recommended access path.
    - `GitRef`: a branch, tag, or commit that contains the controller source. Use the deployment branch until its changes are merged.
 5. Acknowledge the IAM resource creation capability and create the stack.
 6. Wait for `CREATE_COMPLETE`. Open the `ControllerURL` output and sign in with the generated operator token. Retrieve it from the controller's SSM parameter using the read command below.

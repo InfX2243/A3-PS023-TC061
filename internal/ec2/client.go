@@ -23,6 +23,7 @@ type LaunchInput struct {
 	SecurityGroupIDs []string
 	KeyName string
 	InstanceProfile string
+	ClientToken string
 }
 type Instance struct {
 	ID string `json:"InstanceId"`
@@ -30,7 +31,7 @@ type Instance struct {
 	State struct { Name string `json:"Name"` } `json:"State"`
 	PublicIP string `json:"PublicIpAddress"`
 	PrivateIP string `json:"PrivateIpAddress"`
-	AZ string `json:"PlacementAvailabilityZone"`
+	Placement struct { AvailabilityZone string `json:"AvailabilityZone"` } `json:"Placement"`
 }
 
 func (c Client) region(override string) string {
@@ -64,9 +65,11 @@ func (c Client) Launch(ctx context.Context,in LaunchInput) (Instance,error) {
 	if len(in.SecurityGroupIDs)==0 || len(in.SecurityGroupIDs)>5 { return Instance{},errors.New("provide between one and five preconfigured security groups") }
 	for _,id:=range in.SecurityGroupIDs { if !validID(id,"sg-") { return Instance{},errors.New("security group IDs must be valid sg- identifiers") } }
 	if in.KeyName!="" && (len(in.KeyName)>255 || strings.ContainsAny(in.KeyName,"\\r\\n")) { return Instance{},errors.New("invalid EC2 key pair name") }
+	if in.ClientToken=="" || len(in.ClientToken)>64 { return Instance{},errors.New("a stable client token is required for idempotent launch") }
 	if in.InstanceProfile!="" && (len(in.InstanceProfile)>128 || strings.ContainsAny(in.InstanceProfile,"\\r\\n")) { return Instance{},errors.New("invalid IAM instance profile name") }
 	tags,_:=json.Marshal([]map[string]any{{"ResourceType":"instance","Tags":[]map[string]string{{"Key":"Name","Value":in.Name},{"Key":"ManagedBy","Value":"aiori-controller"},{"Key":"Role","Value":"worker-connectivity-test"}}}})
 	args:=[]string{"ec2","run-instances","--image-id",in.ImageID,"--instance-type",in.InstanceType,"--subnet-id",in.SubnetID,"--min-count","1","--max-count","1","--tag-specifications",string(tags)}
+	args=append(args,"--client-token",in.ClientToken)
 	args=append(args,"--security-group-ids"); args=append(args,in.SecurityGroupIDs...)
 	if in.KeyName!="" { args=append(args,"--key-name",in.KeyName) }
 	if in.InstanceProfile!="" { args=append(args,"--iam-instance-profile","Name="+in.InstanceProfile) }

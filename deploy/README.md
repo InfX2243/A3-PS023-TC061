@@ -59,7 +59,7 @@ Install and configure Nginx using deploy/nginx/aiori-controller.conf, obtain a v
 
 ## 5. State semantics and cloud lifecycle
 
-The controller can reliably show **agent healthy**, **stale heartbeat**, or **unreachable** from worker reports. A stopped worker cannot send a heartbeat, so unreachable does not prove the EC2 instance is stopped or terminated. To display authoritative AWS states (pending, running, stopping, stopped, shutting-down, terminated), add the AWS EC2 adapter with least-privilege read permissions and a stable EC2 instance ID; do not infer those states from network failure. Cloud lifecycle actions must be explicit, auditable, and guarded against accidental termination.
+The controller can reliably show **agent healthy**, **stale heartbeat**, or **unreachable** from worker reports. A stopped worker cannot send a heartbeat, so unreachable does not prove the EC2 instance is stopped or terminated. The authenticated AWS EC2 console uses the AWS SDK for Go v2 to display authoritative EC2 lifecycle states (pending, running, stopping, stopped, shutting-down, terminated) and issue explicit start/stop operations. Configure the SDK credential chain and least-privilege permissions; do not infer EC2 states from network failure. Cloud lifecycle actions must be explicit, auditable, and guarded against accidental termination.
 
 ## 6. Persistence and deletion
 

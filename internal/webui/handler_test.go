@@ -558,6 +558,36 @@ func TestAWSPageShowsManagedInstanceInventoryAndIndependentScrollRegion(t *testi
 	}
 }
 
+
+func TestAWSPageUsesFixedNavigationAndSingleScrollableWorkspace(t *testing.T) {
+ h, handler := newTestUI()
+ h.SetEC2Provisioner(&fakeEC2Inventory{instances: []ec2.Instance{{ID:"i-fixed",Name:"Fixed EC2",Type:"t3.micro",State:struct{Name string}{Name:"running"}}}})
+ login := httptest.NewRequest(http.MethodPost,"/login",strings.NewReader("token=operator-secret"))
+ login.Header.Set("Content-Type","application/x-www-form-urlencoded")
+ loginResponse := httptest.NewRecorder()
+ handler.ServeHTTP(loginResponse,login)
+ request := httptest.NewRequest(http.MethodGet,"/aws?region=ap-south-1",nil)
+ request.AddCookie(loginResponse.Result().Cookies()[0])
+ response := httptest.NewRecorder()
+ handler.ServeHTTP(response,request)
+ if response.Code != http.StatusOK { t.Fatalf("AWS page status=%d body=%s",response.Code,response.Body.String()) }
+ body := response.Body.String()
+ for _, want := range []string{"aws-inventory-body","aws-shell","aws-main","aws-topbar","aws-content","aws-overview","Managed EC2 inventory","data-aws-search","data-aws-state-filter","data-aws-row","data-aws-confirm","i-fixed"} {
+  if !strings.Contains(body,want) { t.Errorf("AWS page omitted %q",want) }
+ }
+ css := httptest.NewRecorder()
+ handler.ServeHTTP(css,httptest.NewRequest(http.MethodGet,"/assets/ui.css",nil))
+ for _, want := range []string{"body.aws-inventory-body","position:fixed!important","overflow-y:auto;overflow-x:hidden","height:100dvh","overflow-y:visible;max-height:none"} {
+  if !strings.Contains(css.Body.String(),want) { t.Errorf("AWS stylesheet omitted %q",want) }
+ }
+ if strings.Contains(body,"max-height:560px") || strings.Contains(body,"max-height:420px") { t.Fatal("AWS inventory must not create a nested vertical scroll region") }
+ js := httptest.NewRecorder()
+ handler.ServeHTTP(js,httptest.NewRequest(http.MethodGet,"/assets/ui.js",nil))
+ for _, want := range []string{"initAWSInventoryInteractions","data-aws-state-filter","data-aws-confirm"} {
+  if !strings.Contains(js.Body.String(),want) { t.Errorf("AWS interactions omitted %q",want) }
+ }
+}
+
 func TestSharedDesignSystemStylesheetIsServedAndApplied(t *testing.T) {
 	_, handler := newTestUI()
 

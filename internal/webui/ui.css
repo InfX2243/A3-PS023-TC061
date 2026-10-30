@@ -733,3 +733,18 @@ body.dashboard-body{height:100vh;min-height:100vh;overflow:hidden;overscroll-beh
 @media(prefers-reduced-motion:reduce){
   .sidebar,.sidebar *,.vm-inventory-content *{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}
 }
+
+.workspace-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:0 0 22px}
+.workspace-shortcut{display:flex;align-items:center;gap:13px;min-width:0;padding:17px 18px;border:1px solid #e3e7ef;border-radius:12px;background:#fff;color:#344054;box-shadow:0 5px 20px rgba(23,32,51,.03);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease,background .18s ease}
+.workspace-shortcut:hover{transform:translateY(-2px);border-color:#d1cff8;background:#fdfdff;box-shadow:0 12px 26px rgba(23,32,51,.065);color:#292d65}
+.workspace-shortcut:active{transform:translateY(0) scale(.99)}
+.workspace-shortcut:focus-visible{outline:3px solid rgba(81,69,229,.28);outline-offset:3px}
+.workspace-shortcut-icon{display:grid;width:39px;height:39px;flex:0 0 39px;place-items:center;border-radius:11px;background:#f0efff;color:#5b55d9;font-size:18px}
+.workspace-shortcut-vm{background:#eaf3ff;color:#3979c5}
+.workspace-shortcut-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:3px}
+.workspace-shortcut-copy strong{color:#2c3549;font-size:13px;font-weight:750}
+.workspace-shortcut-copy small{overflow:hidden;color:#7a8598;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.workspace-shortcut-arrow{color:#8d92b5;font-size:18px;transition:transform .18s ease,color .18s ease}
+.workspace-shortcut:hover .workspace-shortcut-arrow{transform:translate(2px,-2px);color:#5b55d9}
+@media(max-width:620px){.workspace-shortcuts{grid-template-columns:1fr;gap:9px}.workspace-shortcut{padding:14px 15px}}
+@media(prefers-reduced-motion:reduce){.workspace-shortcut,.workspace-shortcut *{transition-duration:.01ms!important}}

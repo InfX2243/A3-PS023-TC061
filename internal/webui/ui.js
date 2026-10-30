@@ -76,12 +76,6 @@
         if (empty) empty.hidden = visible !== 0;
       });
     }
-    document.querySelectorAll("form[data-confirm]").forEach(function (form) {
-      form.addEventListener("submit", function (event) {
-        var message = form.getAttribute("data-confirm");
-        if (message && !window.confirm(message)) event.preventDefault();
-      });
-    });
   }
 
   function initDashboardInteractions() {
@@ -112,7 +106,12 @@
 
   function initFormFeedback() {
     document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function (form) {
-      form.addEventListener("submit", function () {
+      form.addEventListener("submit", function (event) {
+        var confirmation = form.getAttribute("data-confirm");
+        if (confirmation && !window.confirm(confirmation)) {
+          event.preventDefault();
+          return;
+        }
         if (form.dataset.submitting === "true") return;
         form.dataset.submitting = "true";
         var button = form.querySelector('button[type="submit"],button:not([type])');

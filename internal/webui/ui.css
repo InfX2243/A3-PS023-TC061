@@ -417,10 +417,9 @@ button, input, select, textarea { font: inherit; }
 
 /* Control-centre dashboard: the shell owns the viewport; only the workspace scrolls. */
 body.dashboard-body{height:100vh;min-height:100vh;overflow:hidden;overscroll-behavior:none}
-.dashboard-shell{display:grid;grid-template-columns:252px minmax(0,1fr);height:100vh;min-height:0;overflow:hidden}
+.dashboard-shell{display:block;height:100vh;min-height:0;overflow:hidden}
 .dashboard-shell>.sidebar{position:fixed;inset:0 auto 0 0;width:252px;height:100vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#34415b transparent}
-.dashboard-shell>.dashboard-main{margin-left:252px}
-.dashboard-main{display:flex;height:100vh;min-height:0;min-width:0;flex-direction:column;margin-left:252px;overflow:hidden}
+.dashboard-main{display:flex;width:auto;height:100vh;min-height:0;min-width:0;flex-direction:column;margin-left:252px;overflow:hidden}
 .dashboard-topbar{position:relative;z-index:4;flex:0 0 66px;min-height:66px}
 .dashboard-content{width:100%;max-width:none;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-bottom:52px;scrollbar-width:thin;scrollbar-color:#c8ccda transparent}
 .dashboard-content::-webkit-scrollbar{width:10px}

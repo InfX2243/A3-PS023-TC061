@@ -28,7 +28,7 @@ func TestBuildUserDataInstallsVerifiedAgentAndUsesSSMSecret(t *testing.T) {
 	for _, expected := range []string{
 		"sha256sum --check --status", "aws ssm get-parameter", "--with-decryption",
 		"x86_64", "apt-get", "worker-agent", "cloud-hypervisor", "ovmf", "firmware_path", "/api/v1/worker/heartbeat",
-		"worker_endpoint", "worker_name", "aiori-worker-agent.service", "systemctl enable --now",
+		"worker_endpoint", "worker_name", "aiori-worker-agent.service", "systemctl enable --now", "amazon-cloudwatch-agent-ctl", "mem_used_percent", "aiori-worker-agent.log",
 	} {
 		if !strings.Contains(script, expected) { t.Fatalf("bootstrap script omitted %q", expected) }
 	}
@@ -51,4 +51,13 @@ func TestBuildUserDataRejectsUnsafeArtifactAndMissingNetworkIdentity(t *testing.
 			if _, err := cfg.BuildUserData(); err == nil { t.Fatal("expected bootstrap validation error") }
 		})
 	}
+}
+
+
+func TestBuildUserDataAllowsOnlyPrivateVPCHTTPForController(t *testing.T) {
+	cfg := validBootstrapConfig()
+	cfg.ControllerURL = "http://10.42.1.10:8080"
+	if _, err := cfg.BuildUserData(); err != nil { t.Fatalf("private VPC HTTP controller endpoint rejected: %v", err) }
+	cfg.ControllerURL = "http://198.51.100.10:8080"
+	if _, err := cfg.BuildUserData(); err == nil { t.Fatal("public HTTP controller endpoint must be rejected") }
 }

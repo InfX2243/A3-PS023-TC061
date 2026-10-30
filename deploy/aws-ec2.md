@@ -31,7 +31,7 @@ The UI shows a generated user-data preview when all bootstrap settings are prese
 
 Set these values in the controller's protected environment (see `.env.example` for the complete variable list):
 
-- `VM_CONTROLLER_PUBLIC_URL`: HTTPS base URL reachable by the worker.
+- `VM_CONTROLLER_PUBLIC_URL`: HTTPS base URL reachable by the worker, or an HTTP URL using the controller's private RFC1918 VPC IP. HTTP is accepted only for a private IP because the worker heartbeat and controller-to-worker API traffic must remain inside the trusted VPC; never use a public HTTP endpoint.
 - `VM_CONTROLLER_WORKER_AGENT_URL` and `VM_CONTROLLER_WORKER_AGENT_SHA256`.
 - `VM_CONTROLLER_CLOUD_HYPERVISOR_URL` and `VM_CONTROLLER_CLOUD_HYPERVISOR_SHA256`.
 - `VM_CONTROLLER_WORKER_DISK_URL` and `VM_CONTROLLER_WORKER_DISK_SHA256`.

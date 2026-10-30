@@ -1,3 +1,7 @@
+# Deployment
+
+For a complete AWS foundation, see the [CloudFormation deployment guide](../infra/README.md).
+
 # Controller deployment and worker onboarding
 
 This deployment is intentionally split into two planes:

@@ -29,7 +29,12 @@ func (h *Handler) uiStylesheet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	file, err := uiAssets.Open("ui.css")
-	if err != nil { http.Error(w, "stylesheet unavailable", http.StatusInternalServerError); return }
+	if err != nil {
+		http.Error(w, "stylesheet unavailable", http.StatusInternalServerError)
+		return
+	}
 	defer file.Close()
-	if _, err := io.Copy(w, file); err != nil { return }
+	if _, err := io.Copy(w, file); err != nil {
+		return
+	}
 }

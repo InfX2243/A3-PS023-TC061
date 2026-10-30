@@ -231,14 +231,16 @@ func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 		bootstrap.NodeName = strings.TrimSpace(r.URL.Query().Get("name"))
 		if data.HasInstance && data.Instance.Name != "" { bootstrap.NodeName = data.Instance.Name }
 		if bootstrap.NodeName == "" { bootstrap.NodeName = "aiori-worker-test" }
-		if script, err := bootstrap.BuildUserData(); err == nil {
+		if bootstrap.ControllerURL == "" {
+			data.InventoryError = "Enter your current ngrok HTTPS URL in the Controller public URL field before launching."
+		} else if script, err := bootstrap.BuildUserData(); err == nil {
 			data.UserData = script
 		} else {
 			data.BootstrapEnabled = false
 			data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error()
 		}
 	} else {
-		data.InventoryError = "Worker bootstrap is not configured. EC2 worker launches are disabled until controller URL, verified agent/hypervisor/disk artifacts, checksums, SSM secret parameter, and worker image ID are configured."
+		data.InventoryError = "Worker bootstrap is not configured. Configure verified worker artifacts/checksums and the worker image ID on the controller; enter the ngrok URL in this form."
 	}
 	h.render(w, "aws", data)
 }

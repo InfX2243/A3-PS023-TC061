@@ -432,3 +432,27 @@ func TestAWSPageShowsManagedInstanceInventoryAndIndependentScrollRegion(t *testi
 		if !strings.Contains(body, expected) { t.Fatalf("AWS page omitted %q", expected) }
 	}
 }
+
+func TestSharedDesignSystemStylesheetIsServedAndApplied(t *testing.T) {
+	_, handler := newTestUI()
+
+	stylesheet := httptest.NewRecorder()
+	handler.ServeHTTP(stylesheet, httptest.NewRequest(http.MethodGet, "/assets/ui.css", nil))
+	if stylesheet.Code != http.StatusOK {
+		t.Fatalf("stylesheet status = %d", stylesheet.Code)
+	}
+	if !strings.Contains(stylesheet.Header().Get("Content-Type"), "text/css") {
+		t.Fatalf("stylesheet content type = %q", stylesheet.Header().Get("Content-Type"))
+	}
+	for _, token := range []string{"--ai-purple: #5145e5", ".sidebar-nav", ".marketing-hero", "@media (max-width:620px)"} {
+		if !strings.Contains(stylesheet.Body.String(), token) {
+			t.Fatalf("design system stylesheet omitted %q", token)
+		}
+	}
+
+	page := httptest.NewRecorder()
+	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/", nil))
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `<link rel="stylesheet" href="/assets/ui.css">`) {
+		t.Fatalf("public landing page did not receive shared stylesheet: status=%d", page.Code)
+	}
+}

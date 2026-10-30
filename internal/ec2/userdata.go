@@ -3,6 +3,7 @@ package ec2
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"regexp"
@@ -67,8 +68,13 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 		"disk URL": b.DiskURL,
 	} {
 		u, err := url.Parse(raw)
-		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (name == "controller URL" && u.Path != "" && u.Path != "/") {
-			return "", fmt.Errorf("%s must be an HTTPS URL without credentials, query, or fragment", name)
+		validScheme := err == nil && u.Scheme == "https"
+		if name == "controller URL" && err == nil && u.Scheme == "http" {
+			ip := net.ParseIP(u.Hostname())
+			validScheme = ip != nil && ip.IsPrivate()
+		}
+		if err != nil || !validScheme || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (name == "controller URL" && u.Path != "" && u.Path != "/") {
+			return "", fmt.Errorf("%s must be HTTPS, or HTTP to a private VPC IP, without credentials, query, or fragment", name)
 		}
 	}
 	for name, sum := range map[string]string{

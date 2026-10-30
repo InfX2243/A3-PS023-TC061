@@ -214,7 +214,7 @@ func TestLandingPageIsPublicAndHasDistinctDocumentationAndLoginRoutes(t *testing
 		t.Fatalf("landing status = %d", response.Code)
 	}
 	body := response.Body.String()
-	for _, expected := range []string{"Infrastructure operations,", "href=\"/docs\"", "href=\"/login\"", "id=\"platform\"", "prefers-reduced-motion", "illustrative interface preview"} {
+	for _, expected := range []string{"Infrastructure,", "href=\"/docs\"", "href=\"/login\"", "id=\"platform\"", "id=\"how-it-works\"", "data-preview-tab=\"fleet\"", "data-preview-panel=\"capacity\"", "Illustrative interface preview"} {
 		if !strings.Contains(strings.ToLower(body), strings.ToLower(expected)) {
 			t.Fatalf("landing page omitted %q", expected)
 		}

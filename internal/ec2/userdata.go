@@ -188,7 +188,7 @@ while True:
     rx,tx=net()
     secret=open('/etc/aiori/worker.env').read().split('=',1)[1].strip()
     body={'instance_id':open('/var/lib/aiori-worker/instance-id').read().strip(),'timestamp':datetime.datetime.now(datetime.timezone.utc).isoformat(),'cpu_percent':cpu_pct,'memory_percent':memory_pct,'disk_percent':disk_pct,'network_rx_bytes':rx,'network_tx_bytes':tx}
-    req=urllib.request.Request(os.environ['AIORI_METRICS_URL'],data=json.dumps(body).encode(),headers={'Authorization':'Bearer '+secret,'Content-Type':'application/json'},method='POST')
+    req=urllib.request.Request(os.environ['AIORI_METRICS_URL'],data=json.dumps(body).encode(),headers={'Authorization':'Bearer '+secret,'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},method='POST')
     try: urllib.request.urlopen(req,timeout=10).read()
     except Exception as exc: print('metrics upload failed:',exc,flush=True)
 PYMETRICS

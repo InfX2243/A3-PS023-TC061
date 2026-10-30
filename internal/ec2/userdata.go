@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -165,8 +166,7 @@ systemctl enable --now aiori-worker-agent
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
 
 // getenv/envUint64 are kept local to avoid introducing a config dependency.
-func getenv(key string) string { return lookupEnv(key) }
-var lookupEnv = func(key string) string { return "" }
+func getenv(key string) string { return os.Getenv(key) }
 func envUint64(key string, fallback uint64) uint64 {
 	value := strings.TrimSpace(getenv(key))
 	if value == "" { return fallback }

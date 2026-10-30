@@ -2,6 +2,7 @@ package webui
 
 import (
 	"context"
+	"encoding/json"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -19,6 +20,7 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
 	"github.com/InfX2243/A3-PS023-TC061/internal/ec2"
+	"github.com/InfX2243/A3-PS023-TC061/internal/observability"
 )
 
 type Service interface {
@@ -45,6 +47,7 @@ type Handler struct {
 	secureCookie bool
 	ec2Client ec2Provisioner
 	ec2Bootstrap ec2.BootstrapConfig
+	metricsStore interface { List(string, time.Time) []observability.Sample }
 	templates *template.Template
 }
 
@@ -83,6 +86,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workers", h.workersPage)
 	mux.HandleFunc("GET /vms", h.vmInventoryPage)
 	mux.HandleFunc("GET /aws", h.awsPage)
+	mux.HandleFunc("GET /aws/instances/{instanceID}/metrics", h.instanceMetrics)
 	mux.HandleFunc("POST /aws/instances", h.launchEC2)
 	mux.HandleFunc("POST /aws/instances/{instanceID}/{action}", h.ec2Action)
 	mux.HandleFunc("POST /workers", h.registerWorker)
@@ -161,6 +165,19 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
 func (h *Handler) SetEC2Bootstrap(config ec2.BootstrapConfig) { h.ec2Bootstrap = config }
+func (h *Handler) SetMetricsStore(store interface { List(string, time.Time) []observability.Sample }) { h.metricsStore = store }
+
+func (h *Handler) instanceMetrics(w http.ResponseWriter, r *http.Request) {
+	h.headers(w)
+	if !h.authenticated(r) { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
+	id := r.PathValue("instanceID")
+	if h.ec2Client == nil || h.metricsStore == nil { http.Error(w, "metrics are unavailable", http.StatusServiceUnavailable); return }
+	if _, err := h.ec2Client.Describe(r.Context(), r.URL.Query().Get("region"), id); err != nil { http.Error(w, "instance not found", http.StatusNotFound); return }
+	var since time.Time
+	if raw := r.URL.Query().Get("since"); raw != "" { parsed, err := time.Parse(time.RFC3339, raw); if err != nil { http.Error(w, "invalid since parameter", http.StatusBadRequest); return }; since = parsed }
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"instance_id": id, "samples": h.metricsStore.List(id, since)})
+}
 type ec2InventoryRow struct { Instance ec2.Instance; Worker domain.Worker; HasWorker bool }
 type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey, DashboardURL string; DefaultAMI, DefaultSubnet, DefaultWorkerSecurityGroup, DefaultWorkerInstanceProfile string }
 

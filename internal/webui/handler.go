@@ -86,6 +86,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workers", h.workersPage)
 	mux.HandleFunc("GET /vms", h.vmInventoryPage)
 	mux.HandleFunc("GET /aws", h.awsPage)
+	mux.HandleFunc("GET /aws/instances/{instanceID}", h.ec2InstancePage)
 	mux.HandleFunc("GET /aws/instances/{instanceID}/metrics", h.instanceMetrics)
 	mux.HandleFunc("POST /aws/instances", h.launchEC2)
 	mux.HandleFunc("POST /aws/instances/{instanceID}/{action}", h.ec2Action)
@@ -180,6 +181,16 @@ func (h *Handler) instanceMetrics(w http.ResponseWriter, r *http.Request) {
 }
 type ec2InventoryRow struct { Instance ec2.Instance; Worker domain.Worker; HasWorker bool }
 type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey, DashboardURL string; DefaultAMI, DefaultSubnet, DefaultWorkerSecurityGroup, DefaultWorkerInstanceProfile string }
+
+func (h *Handler) ec2InstancePage(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	query.Set("instance_id", r.PathValue("instanceID"))
+	clone := r.Clone(r.Context())
+	clone.URL = new(url.URL)
+	*clone.URL = *r.URL
+	clone.URL.RawQuery = query.Encode()
+	h.awsPage(w, clone)
+}
 
 func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)

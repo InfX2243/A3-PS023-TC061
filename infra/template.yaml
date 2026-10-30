@@ -16,6 +16,27 @@ Parameters:
   ControllerArtifactSha256:
     Type: String
     AllowedPattern: '[A-Fa-f0-9]{64}'
+  WorkerAgentUrl:
+    Type: String
+    Description: Immutable HTTPS URL for the worker-agent binary.
+  WorkerAgentSha256:
+    Type: String
+    AllowedPattern: '[A-Fa-f0-9]{64}'
+  CloudHypervisorUrl:
+    Type: String
+    Description: Immutable HTTPS URL for Cloud Hypervisor.
+  CloudHypervisorSha256:
+    Type: String
+    AllowedPattern: '[A-Fa-f0-9]{64}'
+  GuestDiskUrl:
+    Type: String
+    Description: Immutable HTTPS URL for the guest disk image.
+  GuestDiskSha256:
+    Type: String
+    AllowedPattern: '[A-Fa-f0-9]{64}'
+  WorkerAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
   ControllerInstanceType:
     Type: String
     Default: t3.small
@@ -165,6 +186,30 @@ Resources:
               - !Ref AWS::Region
               - "\ncat >/etc/aiori/controller.env <<EOF\nVM_CONTROLLER_OPERATOR_TOKEN=$TOKEN\nVM_CONTROLLER_OPERATOR_USERNAME=operator\nVM_CONTROLLER_OPERATOR_PASSWORD=$PASSWORD\nVM_CONTROLLER_WORKER_SHARED_SECRET=$WORKER_SECRET\nVM_CONTROLLER_LISTEN_ADDR=0.0.0.0:8080\nVM_CONTROLLER_DATABASE_PATH=/var/lib/aiori/controller.db\nAWS_REGION="
               - !Ref AWS::Region
+              - "\nVM_CONTROLLER_PUBLIC_URL=https://"
+              - !Ref DomainName
+              - "\nVM_CONTROLLER_WORKER_AGENT_URL="
+              - !Ref WorkerAgentUrl
+              - "\nVM_CONTROLLER_WORKER_AGENT_SHA256="
+              - !Ref WorkerAgentSha256
+              - "\nVM_CONTROLLER_CLOUD_HYPERVISOR_URL="
+              - !Ref CloudHypervisorUrl
+              - "\nVM_CONTROLLER_CLOUD_HYPERVISOR_SHA256="
+              - !Ref CloudHypervisorSha256
+              - "\nVM_CONTROLLER_WORKER_DISK_URL="
+              - !Ref GuestDiskUrl
+              - "\nVM_CONTROLLER_WORKER_DISK_SHA256="
+              - !Ref GuestDiskSha256
+              - "\nVM_CONTROLLER_WORKER_SECRET_PARAMETER=/aiori/worker/shared-secret\nVM_CONTROLLER_WORKER_IMAGE_ID=ubuntu-demo\nVM_CONTROLLER_WORKER_MEMORY_LIMIT_MIB=4096\nVM_CONTROLLER_WORKER_AGENT_PORT=9090\nVM_CONTROLLER_SECURITY_GROUP_ID="
+              - !Ref ControllerSecurityGroup
+              - "\nVM_CONTROLLER_DEFAULT_SUBNET_ID="
+              - !Ref PublicSubnetA
+              - "\nVM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID="
+              - !Ref WorkerSecurityGroup
+              - "\nVM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE="
+              - !Ref WorkerInstanceProfile
+              - "\nVM_CONTROLLER_DEFAULT_WORKER_AMI_ID="
+              - !Ref WorkerAmi
               - "\nEOF\nchmod 0600 /etc/aiori/controller.env\ncat >/etc/aiori/config.json <<'EOF'\n{\"listen_addr\":\"0.0.0.0:8080\",\"database_path\":\"/var/lib/aiori/controller.db\",\"max_vcpus\":16,\"max_memory_mib\":32768,\"memory_safety_reserve_mib\":1024,\"allowed_images\":[\"ubuntu-demo\"],\"workers\":[],\"secure_cookies\":true,\"shutdown_timeout_seconds\":20}\nEOF\ncat >/etc/systemd/system/aiori-controller.service <<'EOF'\n[Unit]\nDescription=Aiori Compute controller\nAfter=network-online.target\nWants=network-online.target\n[Service]\nType=simple\nUser=root\nEnvironmentFile=/etc/aiori/controller.env\nExecStart=/usr/local/bin/aiori-controller -config /etc/aiori/config.json\nRestart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\nEOF\nsystemctl daemon-reload\nsystemctl enable --now aiori-controller\n"
   ControllerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup

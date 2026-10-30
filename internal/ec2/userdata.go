@@ -173,7 +173,7 @@ cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWCONF
     "append_dimensions": {"InstanceId": "${aws:InstanceId}", "InstanceType": "${aws:InstanceType}"},
     "metrics_collected": {
       "cpu": {"measurement": ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"], "totalcpu": true},
-      "mem": {"measurement": ["mem_used_percent", "mem_available"},
+      "mem": {"measurement": ["mem_used_percent"]},
       "disk": {"measurement": ["used_percent", "inodes_free"], "resources": ["/"]},
       "net": {"measurement": ["bytes_sent", "bytes_recv"], "resources": ["eth0"]}
     }

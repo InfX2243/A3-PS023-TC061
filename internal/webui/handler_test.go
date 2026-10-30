@@ -630,3 +630,28 @@ func TestWorkerInventoryUsesFixedNavigationAndSingleScrollableWorkspace(t *testi
 	}
 }
 
+
+func TestPrepareVMPageUsesFixedNavigationAndLiveConfigurationPreview(t *testing.T) {
+  h, handler := newTestUI()
+  login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+  login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+  loginResponse := httptest.NewRecorder()
+  handler.ServeHTTP(loginResponse, login)
+  request := httptest.NewRequest(http.MethodGet, "/vms/new", nil)
+  request.AddCookie(loginResponse.Result().Cookies()[0])
+  response := httptest.NewRecorder()
+  handler.ServeHTTP(response, request)
+  if response.Code != http.StatusOK { t.Fatalf("prepare VM status=%d", response.Code) }
+  body := response.Body.String()
+  for _, expected := range []string{
+    "prepare-vm-body", "prepare-vm-shell", "prepare-vm-main", "prepare-vm-content",
+    "Workload specification", "Resource summary", "data-vm-preset", "data-vm-preview-memory",
+    "name=\"csrf_token\"", "name=\"idempotency_key\"", "name=\"vcpus\"", "name=\"memory_mib\"",
+    "Approved", "prepare-vm-timeline", "initPrepareVMInteractions",
+    "position:fixed!important", "overflow-y:auto;overflow-x:hidden",
+  } {
+    if !strings.Contains(body, expected) { t.Fatalf("prepare VM page omitted %q", expected) }
+  }
+  if !strings.Contains(body, "action=\"/vms\"") { t.Fatal("prepare VM form lost its create endpoint") }
+  _ = h
+}

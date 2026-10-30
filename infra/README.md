@@ -46,8 +46,13 @@ aws cloudformation deploy \
     DomainName=compute.example.com \
     CertificateArn=arn:aws:acm:ap-south-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
     ControllerArtifactUrl=https://ARTIFACT_HOST/releases/aiori-controller \
-    ControllerArtifactSha256=64_CHARACTER_SHA256
-    WorkerAgentUrl=https://ARTIFACT_HOST/releases/worker-agent \\\n    WorkerAgentSha256=64_CHARACTER_SHA256 \\\n    CloudHypervisorUrl=https://ARTIFACT_HOST/releases/cloud-hypervisor \\\n    CloudHypervisorSha256=64_CHARACTER_SHA256 \\\n    GuestDiskUrl=https://ARTIFACT_HOST/images/guest-disk.img \\\n    GuestDiskSha256=64_CHARACTER_SHA256
+    ControllerArtifactSha256=64_CHARACTER_SHA256 \
+    WorkerAgentUrl=https://ARTIFACT_HOST/releases/worker-agent \
+    WorkerAgentSha256=64_CHARACTER_SHA256 \
+    CloudHypervisorUrl=https://ARTIFACT_HOST/releases/cloud-hypervisor \
+    CloudHypervisorSha256=64_CHARACTER_SHA256 \
+    GuestDiskUrl=https://ARTIFACT_HOST/images/guest-disk.img \
+    GuestDiskSha256=64_CHARACTER_SHA256
 ```
 
 The stack injects the pinned worker-agent, Cloud Hypervisor, and guest-disk artifact URLs/checksums plus the VPC subnet, security groups, worker instance profile, AMI, SSM parameter name, and public controller URL into the controller service environment. The EC2 launch form is pre-filled from those values. Use the same artifact digest that was published alongside each immutable release.

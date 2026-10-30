@@ -42,6 +42,7 @@ type Instance struct {
 	Name      string
 	ManagedBy string
 	ImageID   string
+	Architecture string
 	Type      string
 	State     struct{ Name string }
 	StateReason string
@@ -270,6 +271,7 @@ func fromSDK(v types.Instance) Instance {
 	var out Instance
 	out.ID, out.Type = aws.ToString(v.InstanceId), string(v.InstanceType)
 	out.ImageID, out.KeyName = aws.ToString(v.ImageId), aws.ToString(v.KeyName)
+	out.Architecture = string(v.Architecture)
 	out.VPCID, out.SubnetID = aws.ToString(v.VpcId), aws.ToString(v.SubnetId)
 	for _, tag := range v.Tags {
 		if aws.ToString(tag.Key) == "Name" { out.Name = aws.ToString(tag.Value) }

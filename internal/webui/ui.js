@@ -78,6 +78,34 @@
     }
   }
 
+  function initVMInventoryInteractions() {
+    var search = document.querySelector("[data-vm-search]");
+    var stateFilter = document.querySelector("[data-vm-state-filter]");
+    var rows = Array.prototype.slice.call(document.querySelectorAll("[data-vm-row]"));
+    var empty = document.querySelector("[data-vm-empty-filter]");
+    var count = document.querySelector("[data-vm-visible-count]");
+    if (!rows.length) return;
+
+    function applyFilters() {
+      var query = search ? search.value.trim().toLowerCase() : "";
+      var state = stateFilter ? stateFilter.value : "all";
+      var visible = 0;
+      rows.forEach(function (row) {
+        var text = (row.getAttribute("data-search-text") || row.textContent).toLowerCase();
+        var rowState = (row.getAttribute("data-vm-state") || "").toLowerCase();
+        var matches = (!query || text.indexOf(query) !== -1) && (state === "all" || rowState === state);
+        row.hidden = !matches;
+        if (matches) visible++;
+      });
+      if (empty) empty.hidden = visible !== 0;
+      if (count) count.textContent = visible + (visible === 1 ? " shown" : " shown");
+    }
+
+    if (search) search.addEventListener("input", applyFilters);
+    if (stateFilter) stateFilter.addEventListener("change", applyFilters);
+    applyFilters();
+  }
+
   function initDashboardInteractions() {
     document.querySelectorAll("[data-alert-dismiss]").forEach(function (button) {
       button.addEventListener("click", function () {
@@ -359,6 +387,7 @@
     initLoginInteractions();
     initDashboardInteractions();
     initWorkerInventoryInteractions();
+    initVMInventoryInteractions();
   });
 }());
 

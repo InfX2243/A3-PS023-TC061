@@ -52,6 +52,7 @@ type vmRow struct { VM domain.VM; Operation domain.Operation; HasOperation bool 
 type dashboardData struct { Workers []domain.Worker; VMs []vmRow; Error string; Notice string; Refreshing bool; CSRFToken string }
 type formData struct { Limits Limits; Error string; IdempotencyKey string; CSRFToken string }
 type workerPageData struct { Workers []domain.Worker; Error string; Notice string; CSRFToken string }
+type vmInventoryPageData struct { VMs []vmRow; Error string; Notice string; Refreshing bool; CSRFToken string }
 type ec2Provisioner interface { Launch(context.Context, ec2.LaunchInput) (ec2.Instance,error); Describe(context.Context,string,string) (ec2.Instance,error); Action(context.Context,string,string,string) error }
 type ec2InventoryProvisioner interface { ListManaged(context.Context, string) ([]ec2.Instance, error) }
 type ec2IngressProvisioner interface { AllowControllerIngress(context.Context, string, []string, string, int) error }
@@ -65,7 +66,7 @@ func NewHandler(service Service, operatorToken string, limits Limits, secureCook
 }
 
 func NewHandlerWithCredentials(service Service, operatorToken, username, password string, limits Limits, secureCookie bool) *Handler {
-	return &Handler{service: service, token: operatorToken, loginUsername: username, loginPassword: password, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Funcs(template.FuncMap{"divMiB": func(v uint64) uint64 { return v / (1024 * 1024) }, "stateIs": func(state domain.VMState, expected string) bool { return string(state) == expected }, "countWorkerState": func(workers []domain.Worker, expected string) int { count := 0; for _, worker := range workers { if string(worker.State) == expected { count++ } }; return count }, "countVMState": func(vms []vmRow, expected string) int { count := 0; for _, vm := range vms { if string(vm.VM.Observed) == expected { count++ } }; return count }, "memoryPercent": func(available, limit uint64) int { if limit == 0 { return 0 }; percent := int(available * 100 / limit); if percent > 100 { return 100 }; if percent < 0 { return 0 }; return percent }, "percentOf": func(value, total int) int { if total <= 0 || value <= 0 { return 0 }; percent := value * 100 / total; if percent > 100 { return 100 }; return percent }, "countNonHealthyWorkers": func(workers []domain.Worker) int { count := 0; for _, worker := range workers { if string(worker.State) != "healthy" { count++ } }; return count }, "countActiveOperations": func(vms []vmRow) int { count := 0; for _, vm := range vms { if vm.HasOperation && (vm.Operation.State == domain.OperationPending || vm.Operation.State == domain.OperationDispatched || vm.Operation.State == domain.OperationUnknown) { count++ } }; return count }}).Parse(pageTemplates + docsPageTemplate + workersPageTemplate + awsPageTemplate + sharedNavTemplate + workerInventoryTemplate))}
+	return &Handler{service: service, token: operatorToken, loginUsername: username, loginPassword: password, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Funcs(template.FuncMap{"divMiB": func(v uint64) uint64 { return v / (1024 * 1024) }, "stateIs": func(state domain.VMState, expected string) bool { return string(state) == expected }, "countWorkerState": func(workers []domain.Worker, expected string) int { count := 0; for _, worker := range workers { if string(worker.State) == expected { count++ } }; return count }, "countVMState": func(vms []vmRow, expected string) int { count := 0; for _, vm := range vms { if string(vm.VM.Observed) == expected { count++ } }; return count }, "memoryPercent": func(available, limit uint64) int { if limit == 0 { return 0 }; percent := int(available * 100 / limit); if percent > 100 { return 100 }; if percent < 0 { return 0 }; return percent }, "percentOf": func(value, total int) int { if total <= 0 || value <= 0 { return 0 }; percent := value * 100 / total; if percent > 100 { return 100 }; return percent }, "countNonHealthyWorkers": func(workers []domain.Worker) int { count := 0; for _, worker := range workers { if string(worker.State) != "healthy" { count++ } }; return count }, "countActiveOperations": func(vms []vmRow) int { count := 0; for _, vm := range vms { if vm.HasOperation && (vm.Operation.State == domain.OperationPending || vm.Operation.State == domain.OperationDispatched || vm.Operation.State == domain.OperationUnknown) { count++ } }; return count }}).Parse(pageTemplates + docsPageTemplate + workersPageTemplate + awsPageTemplate + sharedNavTemplate + workerInventoryTemplate + vmInventoryTemplate))}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -80,6 +81,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console", h.dashboard)
 	mux.HandleFunc("GET /console/", h.dashboard)
 	mux.HandleFunc("GET /workers", h.workersPage)
+	mux.HandleFunc("GET /vms", h.vmInventoryPage)
 	mux.HandleFunc("GET /aws", h.awsPage)
 	mux.HandleFunc("POST /aws/instances", h.launchEC2)
 	mux.HandleFunc("POST /aws/instances/{instanceID}/{action}", h.ec2Action)
@@ -296,6 +298,28 @@ func (h *Handler) deleteWorker(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) redirectWorkerResult(w http.ResponseWriter, r *http.Request, key, value string) {
 	location := "/workers?" + key + "=" + url.QueryEscape(value)
 	http.Redirect(w, r, location, http.StatusSeeOther)
+}
+
+func (h *Handler) vmInventoryPage(w http.ResponseWriter, r *http.Request) {
+	h.headers(w)
+	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
+	data := vmInventoryPageData{VMs: []vmRow{}, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r)}
+	if h.service == nil {
+		h.renderStatus(w, http.StatusServiceUnavailable, "vm-inventory", vmInventoryPageData{Error: "Controller service is not initialized.", CSRFToken: data.CSRFToken})
+		return
+	}
+	vms, err := h.service.ListVMs(r.Context())
+	if err != nil {
+		h.renderStatus(w, http.StatusInternalServerError, "vm-inventory", vmInventoryPageData{Error: "Could not load virtual machine inventory.", CSRFToken: data.CSRFToken})
+		return
+	}
+	for _, vm := range vms {
+		op, opErr := h.service.LatestOperation(r.Context(), vm.ID)
+		hasOperation := opErr == nil
+		if hasOperation && (op.State == domain.OperationPending || op.State == domain.OperationDispatched || op.State == domain.OperationUnknown) { data.Refreshing = true }
+		data.VMs = append(data.VMs, vmRow{VM: vm, Operation: op, HasOperation: hasOperation})
+	}
+	h.render(w, "vm-inventory", data)
 }
 
 func (h *Handler) newVMPage(w http.ResponseWriter, r *http.Request) {

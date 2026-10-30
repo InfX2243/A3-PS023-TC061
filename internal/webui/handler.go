@@ -162,14 +162,14 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
 func (h *Handler) SetEC2Bootstrap(config ec2.BootstrapConfig) { h.ec2Bootstrap = config }
 type ec2InventoryRow struct { Instance ec2.Instance; Worker domain.Worker; HasWorker bool }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; DefaultSubnetID, DefaultWorkerSecurityGroupID, DefaultWorkerInstanceProfile, DefaultImageID string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; DefaultSubnetID, DefaultWorkerSecurityGroupID, DefaultWorkerInstanceProfile, DefaultImageID, CloudWatchDashboardURL string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
 
 func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
 	region := r.URL.Query().Get("region")
 	if region == "" { region = os.Getenv("AWS_REGION"); if region == "" { region = os.Getenv("AWS_DEFAULT_REGION") } }
-	data := awsPageData{DefaultSubnetID: os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID"), DefaultWorkerSecurityGroupID: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID"), DefaultWorkerInstanceProfile: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE"), DefaultImageID: os.Getenv("VM_CONTROLLER_DEFAULT_IMAGE_ID"), Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
+	data := awsPageData{DefaultSubnetID: os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID"), DefaultWorkerSecurityGroupID: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID"), DefaultWorkerInstanceProfile: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE"), DefaultImageID: os.Getenv("VM_CONTROLLER_DEFAULT_IMAGE_ID"), CloudWatchDashboardURL: os.Getenv("VM_CONTROLLER_CLOUDWATCH_DASHBOARD_URL"), Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
 	workersByID := make(map[string]domain.Worker)
 	if h.service != nil {
 		workers, err := h.service.ListWorkers(r.Context())

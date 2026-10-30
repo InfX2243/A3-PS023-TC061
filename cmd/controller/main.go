@@ -12,6 +12,7 @@ import (
 
 	"github.com/InfX2243/A3-PS023-TC061/internal/config"
 	"github.com/InfX2243/A3-PS023-TC061/internal/controller"
+	"github.com/InfX2243/A3-PS023-TC061/internal/ec2"
 	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
 	"github.com/InfX2243/A3-PS023-TC061/internal/store"
 	"github.com/InfX2243/A3-PS023-TC061/internal/workerhealth"
@@ -62,11 +63,13 @@ func main() {
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: allowedImages,
 	}).Register(mux)
-	webui.NewHandlerWithCredentials(service, cfg.OperatorToken, cfg.OperatorUsername, cfg.OperatorPassword, webui.Limits{
+	ui := webui.NewHandlerWithCredentials(service, cfg.OperatorToken, cfg.OperatorUsername, cfg.OperatorPassword, webui.Limits{
 		MaxVCPUs: cfg.MaxVCPUs,
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: cfg.AllowedImages,
-	}, cfg.SecureCookies).Register(mux)
+	}, cfg.SecureCookies)
+	ui.SetEC2Provisioner(ec2.Client{Region: os.Getenv("AWS_REGION")})
+	ui.Register(mux)
 	registry := workerhealth.NewRegistry(workerhealth.DefaultStaleAfter)
 	workerhealth.NewHandlerWithRecorder(registry, cfg.WorkerSharedSecret, cfg.OperatorToken, service).RegisterHeartbeatOnly(mux)
 

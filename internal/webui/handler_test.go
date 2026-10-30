@@ -183,6 +183,31 @@ func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
 	}
 }
 
+func TestDashboardRendersControlCentreChartsAlertsAndScrollableWorkspace(t *testing.T) {
+	_, handler := newTestUI()
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/console", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("dashboard status = %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{
+		"dashboard-body", "dashboard-shell", "dashboard-content", "Workload distribution",
+		"Worker memory headroom", "Operational alerts", "state-chart", "capacity-chart",
+		"data-alert-dismiss", "dashboard-refresh", "aria-live=\"polite\"",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("dashboard omitted control-centre feature %q", expected)
+		}
+	}
+}
+
 func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testing.T) {
 	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
 	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")

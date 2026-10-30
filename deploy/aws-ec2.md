@@ -41,6 +41,15 @@ Set these values in the controller's protected environment (see `.env.example` f
 
 Artifact URLs must be HTTPS URLs without embedded credentials, query strings, or fragments. Every SHA-256 must be exactly 64 hexadecimal characters. Publish immutable/versioned artifacts and verify their provenance before configuring these values. Do not use mutable `latest` artifact URLs.
 
+To publish the worker-agent binary from this repository, create and push a version tag after the source is ready:
+
+```sh
+git tag worker-agent-v0.1.0
+git push origin worker-agent-v0.1.0
+```
+
+The `.github/workflows/release-worker-agent.yml` workflow builds a static Linux amd64 binary and attaches it with a `SHA256SUMS` file to the GitHub release. Use the versioned release asset URL for `VM_CONTROLLER_WORKER_AGENT_URL` and the matching digest for `VM_CONTROLLER_WORKER_AGENT_SHA256`. Publish Cloud Hypervisor and the guest disk as immutable HTTPS artifacts as well.
+
 The EC2 launch form requires an instance profile when bootstrap is enabled. Attach a worker role that grants only `ssm:GetParameter` on the exact configured parameter ARN (and `kms:Decrypt` for the specific customer-managed KMS key if applicable). Do not grant broad SSM read access. Never put the shared secret itself in user data, EC2 tags, AMI metadata, or browser forms.
 
 ## 3. Private network requirements

@@ -1,6 +1,6 @@
 # AWS Worker Feasibility Gate (T-01 / T-02)
 
-Status: **candidate selected; runtime feasibility not yet proven**. This document deliberately does not claim that any EC2 instance has been launched or that a guest has booted.
+Status: **candidate selected; the controller now requests `NestedVirtualization=enabled` for `c8i.xlarge`; runtime feasibility is still not proven**. This document deliberately does not claim that any EC2 instance has been launched or that a guest has booted.
 
 ## Decisions for the first short-lived feasibility run
 
@@ -46,7 +46,7 @@ Select a current official Ubuntu AMI from that result and record its exact AMI I
 
 ## Launch and host evidence
 
-Launch **one temporary** `c8i.xlarge` worker with nested virtualization explicitly enabled (`--cpu-options "NestedVirtualization=enabled"`), Ubuntu x86-64, encrypted EBS, IMDSv2 required, a restrictive security group, and a time-limited resource tag. Do not put SSH keys, tokens, or other secrets in this document. Do not open the Cloud Hypervisor socket or worker API to the public Internet.
+Launch **one temporary** `c8i.xlarge` worker with nested virtualization explicitly enabled. The controller EC2 form now sets `CpuOptions.NestedVirtualization=enabled` automatically for this profile; the equivalent AWS CLI option is `--cpu-options "NestedVirtualization=enabled"`. Use Ubuntu x86-64, encrypted EBS, IMDSv2 required, a restrictive security group, and a time-limited resource tag. Do not put SSH keys, tokens, or other secrets in this document. Do not open the Cloud Hypervisor socket or worker API to the public Internet.
 
 On the instance, capture the outputs (remove public IPs, account IDs, and other sensitive data before committing):
 

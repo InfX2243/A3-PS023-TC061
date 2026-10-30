@@ -2,6 +2,7 @@ package webui
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
+	"github.com/InfX2243/A3-PS023-TC061/internal/ec2"
 )
 
 type fakeUIService struct { registeredID string; registeredName string; registeredEndpoint string; registeredMemory uint64; deletedID string; createCalls int; lastKey string; startCalls int; stopCalls int; vms []domain.VM; latest domain.Operation; latestErr error }
@@ -332,7 +334,7 @@ func TestWorkerInventoryRequiresAuthenticationAndRendersRegistrationForm(t *test
 	page := httptest.NewRecorder()
 	handler.ServeHTTP(page, request)
 	if page.Code != http.StatusOK { t.Fatalf("worker inventory status = %d; body=%s", page.Code, page.Body.String()) }
-	for _, want := range []string{"Register a machine", "memory_limit_mib", "Worker agent base URL"} {
+	for _, want := range []string{"Register an existing worker manually", "memory_limit_mib", "Agent endpoint"} {
 		if !strings.Contains(page.Body.String(), want) { t.Errorf("worker page missing %q", want) }
 	}
 }
@@ -398,5 +400,35 @@ func TestUsernamePasswordLogin(t *testing.T) {
 	cookies := goodResponse.Result().Cookies()
 	if len(cookies) != 1 || !cookies[0].HttpOnly || !cookies[0].Secure || cookies[0].SameSite != http.SameSiteStrictMode {
 		t.Fatalf("session cookie attributes not secure: %#v", cookies)
+	}
+}
+
+type fakeEC2Inventory struct { instances []ec2.Instance }
+func (f *fakeEC2Inventory) Launch(context.Context, ec2.LaunchInput) (ec2.Instance, error) { return ec2.Instance{}, nil }
+func (f *fakeEC2Inventory) Describe(_ context.Context, _ string, id string) (ec2.Instance, error) {
+	for _, instance := range f.instances { if instance.ID == id { return instance, nil } }
+	return ec2.Instance{}, errors.New("not found")
+}
+func (f *fakeEC2Inventory) Action(context.Context, string, string, string) error { return nil }
+func (f *fakeEC2Inventory) ListManaged(context.Context, string) ([]ec2.Instance, error) { return f.instances, nil }
+
+func TestAWSPageShowsManagedInstanceInventoryAndIndependentScrollRegion(t *testing.T) {
+	h, handler := newTestUI()
+	h.SetEC2Provisioner(&fakeEC2Inventory{instances: []ec2.Instance{{
+		ID: "i-node123", Name: "aiori-worker", Type: "t3.micro", PublicIP: "203.0.113.8", PrivateIP: "10.0.0.8",
+		State: struct{ Name string }{Name: "running"},
+	}, {ID: "worker-a", Name: "Registered worker", Type: "t3.small", State: struct{ Name string }{Name: "running"}}}})
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/aws?region=ap-south-1", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("AWS page status=%d body=%s", response.Code, response.Body.String()) }
+	body := response.Body.String()
+	for _, expected := range []string{"Managed EC2 inventory", "aiori-worker", "i-node123", "203.0.113.8", "Registered worker", "healthy", "aws-table-scroll", "Refresh inventory from AWS"} {
+		if !strings.Contains(body, expected) { t.Fatalf("AWS page omitted %q", expected) }
 	}
 }

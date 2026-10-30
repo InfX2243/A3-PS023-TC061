@@ -3,7 +3,7 @@
 This deployment is intentionally split into two planes:
 
 - **Controller**: a small Linux EC2 instance (a t3.micro can host the Go controller, SQLite metadata, and UI for a prototype). It does not run guest VMs.
-- **Worker**: a separate KVM-capable Linux host running the worker agent and Cloud Hypervisor. A worker needs usable /dev/kvm, enough RAM/CPU, a staged allowlisted guest image, and network reachability to the controller. Do not assume a t3.micro is suitable as a virtualization worker.
+- **Worker**: a separate KVM-capable Linux host running the worker agent and Cloud Hypervisor (the EC2 console's `c8i.xlarge` profile requests nested virtualization). A worker needs usable /dev/kvm, enough RAM/CPU, a staged allowlisted guest image, and network reachability to the controller. Do not assume a t3.micro is suitable as a virtualization worker.
 
 ## 1. Configure secrets
 
@@ -51,15 +51,13 @@ Install and configure Nginx using deploy/nginx/aiori-controller.conf, obtain a v
 
 ## 4. Onboard a worker
 
-1. Create a separate KVM-capable host. Verify test -c /dev/kvm, KVM permissions, CPU virtualization support, memory headroom, and the exact Cloud Hypervisor binary and guest image checksums.
-2. Install the worker agent as a separate systemd service. Configure its controller URL and the same VM_CONTROLLER_WORKER_SHARED_SECRET value used by the controller. Stage image artifacts locally and configure the worker's allowlist; do not accept arbitrary host paths from the UI.
-3. Ensure the worker can reach the controller's authenticated heartbeat endpoint over a private network or a tightly restricted TLS path. Restrict worker inbound traffic to the controller; do not expose the agent API publicly.
-4. Register the worker in the controller UI/API with a stable ID, display name, agent endpoint, and configured memory cap. The worker ID and configured memory cap must match the agent's heartbeat configuration.
-5. Confirm a recent heartbeat and healthy Cloud Hypervisor probe before scheduling VMs.
+For EC2-managed workers, configure the checksum-pinned bootstrap environment and IAM roles described in [EC2 inventory and bootstrap](./aws-ec2.md). Launch through `/aws`; cloud-init installs the worker agent, retrieves its shared secret from SSM, and starts the systemd service. The first authenticated heartbeat advertises the private endpoint and auto-enrolls the node in SQLite. Confirm a recent heartbeat and a healthy `/dev/kvm` + Cloud Hypervisor probe in Worker inventory before scheduling VMs.
+
+For an existing non-EC2 worker, the manual onboarding path remains available. Verify `/dev/kvm`, install the worker agent, configure the same worker shared secret, stage the allowlisted guest artifacts, ensure private controller-to-worker reachability, and register the stable ID, endpoint, and memory cap through the UI/API. Do not expose the worker API or Cloud Hypervisor socket publicly.
 
 ## 5. State semantics and cloud lifecycle
 
-The controller can reliably show **agent healthy**, **stale heartbeat**, or **unreachable** from worker reports. A stopped worker cannot send a heartbeat, so unreachable does not prove the EC2 instance is stopped or terminated. To display authoritative AWS states (pending, running, stopping, stopped, shutting-down, terminated), add the AWS EC2 adapter with least-privilege read permissions and a stable EC2 instance ID; do not infer those states from network failure. Cloud lifecycle actions must be explicit, auditable, and guarded against accidental termination.
+The controller can reliably show **agent healthy**, **stale heartbeat**, or **unreachable** from worker reports. A stopped worker cannot send a heartbeat, so unreachable does not prove the EC2 instance is stopped or terminated. The authenticated AWS EC2 console uses the AWS SDK for Go v2 to display authoritative EC2 lifecycle states (pending, running, stopping, stopped, shutting-down, terminated) and issue explicit start/stop operations. Configure the SDK credential chain and least-privilege permissions; do not infer EC2 states from network failure. Cloud lifecycle actions must be explicit, auditable, and guarded against accidental termination.
 
 ## 6. Persistence and deletion
 

@@ -242,3 +242,36 @@ func TestConfiguredWorkerStartupDoesNotResetPersistedState(t *testing.T) {
 		t.Fatalf("startup reset persisted worker state: %#v", workers)
 	}
 }
+
+func TestHeartbeatAutoEnrollsWorkerWithAdvertisedEndpoint(t *testing.T) {
+	server, _ := fakeWorker(t, 0)
+	defer server.Close()
+	svc, _ := testService(t, server.URL)
+	heartbeat := workerhealth.Heartbeat{
+		WorkerID: "i-worker123", Hostname: "ip-10-0-1-12",
+		Endpoint: "http://10.0.1.12:9090",
+		AvailableMemoryBytes: 2 * 1024 * 1024 * 1024,
+		ConfiguredMemoryCapBytes: 4 * 1024 * 1024 * 1024,
+		CloudHypervisorHealthy: true,
+	}
+	if err := svc.RecordWorkerHeartbeat(context.Background(), heartbeat); err != nil { t.Fatalf("auto-enroll heartbeat: %v", err) }
+	workers, err := svc.ListWorkers(context.Background())
+	if err != nil { t.Fatal(err) }
+	var found *domain.Worker
+	for i := range workers { if workers[i].ID == heartbeat.WorkerID { found = &workers[i]; break } }
+	if found == nil { t.Fatal("auto-enrolled worker missing from durable inventory") }
+	if found.Name != heartbeat.Hostname || found.Endpoint != heartbeat.Endpoint || found.State != domain.WorkerHealthy { t.Fatalf("auto-enrolled worker metadata = %#v", found) }
+	if found.AvailableMemoryBytes != heartbeat.AvailableMemoryBytes || found.MemoryLimitBytes != heartbeat.ConfiguredMemoryCapBytes { t.Fatalf("auto-enrolled capacity = %#v", found) }
+}
+
+func TestAutoEnrollmentRejectsMissingOrUnsafeEndpoint(t *testing.T) {
+	server, _ := fakeWorker(t, 0)
+	defer server.Close()
+	svc, _ := testService(t, server.URL)
+	base := workerhealth.Heartbeat{WorkerID: "i-worker456", Hostname: "node", AvailableMemoryBytes: 1024, ConfiguredMemoryCapBytes: 2048, CloudHypervisorHealthy: true}
+	if err := svc.RecordWorkerHeartbeat(context.Background(), base); err == nil { t.Fatal("expected missing endpoint to be rejected") }
+	base.Endpoint = "http://user:password@10.0.1.15:9090"
+	if err := svc.RecordWorkerHeartbeat(context.Background(), base); err == nil { t.Fatal("expected credential-bearing endpoint to be rejected") }
+	base.Endpoint = "http://198.51.100.15:9090"
+	if err := svc.RecordWorkerHeartbeat(context.Background(), base); err == nil { t.Fatal("expected public endpoint to be rejected") }
+}

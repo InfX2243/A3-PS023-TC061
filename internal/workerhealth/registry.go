@@ -33,6 +33,7 @@ type Report struct {
 type Heartbeat struct {
 	WorkerID                 string `json:"worker_id"`
 	Hostname                 string `json:"hostname"`
+	Endpoint                 string `json:"endpoint,omitempty"`
 	AvailableMemoryBytes     uint64 `json:"available_memory_bytes"`
 	ConfiguredMemoryCapBytes uint64 `json:"configured_memory_cap_bytes"`
 	CloudHypervisorHealthy   bool   `json:"cloud_hypervisor_healthy"`

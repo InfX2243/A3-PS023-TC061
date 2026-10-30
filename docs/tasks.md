@@ -218,6 +218,30 @@ The user selected AWS EC2 and explicitly accepted AWS's official nested-virtuali
 - Status: **runbook present; demo and teardown not executed**.
 - Depends on: T-20.
 
+### T-22 — Build managed EC2 inventory and lifecycle console
+- [x] Query all controller-tagged EC2 instances in the selected region, including paginated results.
+- [x] Persist no duplicate shadow inventory: AWS remains authoritative for cloud lifecycle; controller SQLite remains authoritative for worker/VM metadata.
+- [x] Add instance inspection, IP/VPC/subnet/security-group metadata, AWS Console connection link, SSH command guidance, and guarded start/stop actions.
+- [x] Join EC2 instance IDs to worker registrations so the AWS inventory visibly distinguishes not-enrolled, unavailable, stale, and healthy agent states.
+- [x] Add bounded table scrolling and remove timed full-page reloads that reset the operator's scroll position.
+- [ ] Run EC2 adapter/UI tests and full Go CI; perform browser review against a deployed controller.
+- Acceptance: every controller-tagged instance appears in the selected region, inspection and lifecycle actions are restricted to managed resources, and agent health is never inferred from EC2 state.
+- Status: **implementation committed; automated tests added but not yet executed in this session; live AWS/browser verification pending**.
+- Depends on: T-15, T-18.
+
+### T-23 — Bootstrap and auto-enroll EC2 worker agents
+- [x] Generate cloud-init user data from protected controller configuration; verify immutable worker-agent, Cloud Hypervisor, and guest disk artifacts plus OVMF UEFI firmware against SHA-256 before installation.
+- [x] Retrieve the worker shared secret from an SSM SecureString using the worker instance role; do not embed the secret value in user data.
+- [x] Install and start the worker agent as a systemd service, advertise its private endpoint, and auto-enroll it on the first authenticated heartbeat.
+- [x] Restrict worker-agent ingress to the controller security group; reject public IP endpoints during auto-enrollment.
+- [x] Show generated user data and distinguish EC2 lifecycle from agent heartbeat/hypervisor health in the UI.
+- [ ] Verify cloud-init on a real Linux AMI, SSM permissions, same-VPC security-group behavior, agent heartbeat, and KVM/Cloud Hypervisor readiness.
+- [x] Add a c8i.xlarge launch profile that explicitly requests `CpuOptions.NestedVirtualization=enabled`; retain t3 profiles as connectivity/bootstrap tests only.
+- [ ] Verify the launched c8i.xlarge actually exposes `/dev/kvm` and passes a real guest boot/stop cycle.
+- Acceptance: a launched supported worker installs the pinned agent/artifacts, auto-enrolls, reports healthy only after the KVM/VMM probe, and accepts authenticated controller VM lifecycle calls over a private path.
+- Status: **software path and c8i nested-virtualization API request implemented behind explicit bootstrap configuration; real artifact publication, SSM/IAM setup, controller network deployment, and runtime KVM/guest validation remain deployment gates**.
+- Depends on: T-01, T-18, T-19.
+
 ## Definition of done for every task
 
 - Scope is limited to the selected task.

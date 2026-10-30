@@ -1,6 +1,6 @@
 # EC2 inventory, worker bootstrap, and lifecycle operations
 
-The authenticated controller console at `/aws` now lists every EC2 instance tagged `ManagedBy=aiori-controller` in the selected region, with AWS lifecycle state, instance type, IDs, IP addresses, placement, AMI, key pair, VPC/subnet, and security groups. The inventory refreshes automatically; instance details include AWS Console navigation and an Ubuntu SSH command when a public IP and key pair are present. Start/stop actions are explicit. Termination remains intentionally unavailable.
+The authenticated controller console at `/aws` now lists every EC2 instance tagged `ManagedBy=aiori-controller` in the selected region, with AWS lifecycle state, instance type, IDs, IP addresses, placement, AMI, key pair, VPC/subnet, and security groups. The inventory refreshes automatically; instance details include AWS Console navigation and an Ubuntu SSH command when a public IP and key pair are present. Start/stop actions are explicit, and termination is available only through a separate irreversible confirmation. All lifecycle actions re-check the controller management tag before calling AWS.
 
 The controller uses the AWS SDK for Go v2. The AWS CLI is not required on the controller. The worker bootstrap installs AWS CLI on the worker only to retrieve its SecureString bootstrap secret through the worker's instance role.
 
@@ -82,6 +82,7 @@ The `c8i.xlarge` profile explicitly sends `CpuOptions.NestedVirtualization=enabl
 - Use **Connect in AWS console** on the inspected instance to open the AWS instance details page.
 - For an Ubuntu AMI with an EC2 key pair, the details page shows an SSH command template. The private key remains on your machine; never upload it.
 - Use **Start** and **Stop** only when the instance is in a compatible AWS state. Refresh to confirm the resulting state.
+- **Terminate** is irreversible and deletes the EC2 instance; use it only after checking attached EBS volume retention and any workload/data impact. The controller only offers this action for instances tagged as managed by this project.
 - Use Worker inventory for agent health and the controller VM dashboard for guest VM operations. EC2 running is not equivalent to a running guest VM.
 
 ## 7. Build and verify

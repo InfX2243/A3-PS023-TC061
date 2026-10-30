@@ -196,7 +196,9 @@ func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if data.BootstrapEnabled {
 		bootstrap := h.ec2Bootstrap
-		bootstrap.NodeName = "aiori-worker-test"
+		bootstrap.NodeName = strings.TrimSpace(r.URL.Query().Get("name"))
+		if data.HasInstance && data.Instance.Name != "" { bootstrap.NodeName = data.Instance.Name }
+		if bootstrap.NodeName == "" { bootstrap.NodeName = "aiori-worker-test" }
 		if script, err := bootstrap.BuildUserData(); err == nil { data.UserData = script } else { data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error() }
 	}
 	h.render(w, "aws", data)
@@ -219,7 +221,7 @@ func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
    }
    notice = "EC2 launch accepted with checksum-verified worker bootstrap and private controller-only agent ingress. Wait for cloud-init and the first authenticated heartbeat; agent health is shown separately in Worker inventory."
  }
- http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape(notice),http.StatusSeeOther)
+ http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape(notice)+"&name="+url.QueryEscape(in.Name),http.StatusSeeOther)
 }
 
 func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {

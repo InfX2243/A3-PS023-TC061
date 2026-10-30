@@ -26,6 +26,7 @@ type BootstrapConfig struct {
 	NodeName string
 	MemoryLimitMiB uint64
 	AgentPort int
+	CloudWatchLogGroup string
 }
 
 var sha256Pattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
@@ -45,6 +46,7 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 		ImageID: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_IMAGE_ID")),
 		MemoryLimitMiB: envUint64("VM_CONTROLLER_WORKER_MEMORY_LIMIT_MIB", 4096),
 		AgentPort: int(envUint64("VM_CONTROLLER_WORKER_AGENT_PORT", 9090)),
+		CloudWatchLogGroup: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_LOG_GROUP")),
 	}
 }
 
@@ -89,6 +91,8 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 	}
 	if b.MemoryLimitMiB < 512 || b.MemoryLimitMiB > 1<<20 { return "", errors.New("worker memory limit must be between 512 and 1048576 MiB") }
 	if b.AgentPort < 1024 || b.AgentPort > 65535 { return "", errors.New("worker agent port must be between 1024 and 65535") }
+	if b.CloudWatchLogGroup == "" { b.CloudWatchLogGroup = "/aiori/worker" }
+	if !strings.HasPrefix(b.CloudWatchLogGroup, "/aiori/") || strings.ContainsAny(b.CloudWatchLogGroup, "\r\n\\\"") { return "", errors.New("worker CloudWatch log group must be a safe /aiori/ path") }
 	memoryBytes := b.MemoryLimitMiB * 1024 * 1024
 	return fmt.Sprintf(`#!/bin/bash
 set -Eeuo pipefail
@@ -162,11 +166,31 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 systemctl enable --now aiori-worker-agent
+curl --fail --silent --show-error --location https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -o /tmp/amazoncloudwatch-agent.deb
+dpkg -i /tmp/amazoncloudwatch-agent.deb
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWEOF
+{
+  "agent": {"metrics_collection_interval": 60, "run_as_user": "root"},
+  "metrics": {"namespace": "CWAgent", "append_dimensions": {"InstanceId": "$INSTANCE_ID"}, "aggregation_dimensions": [["InstanceId"]], "metrics_collected": {
+    "mem": {"measurement": ["mem_used_percent", "mem_available"], "metrics_collection_interval": 60},
+    "disk": {"measurement": ["used_percent", "inodes_free"], "resources": ["/"], "metrics_collection_interval": 60},
+    "diskio": {"measurement": ["reads", "writes", "read_bytes", "write_bytes", "io_time"], "resources": ["*"], "metrics_collection_interval": 60},
+    "net": {"measurement": ["bytes_sent", "bytes_recv", "packets_sent", "packets_recv"], "resources": ["*"], "metrics_collection_interval": 60},
+    "cpu": {"measurement": ["usage_idle", "usage_user", "usage_system", "usage_iowait"], "totalcpu": true, "metrics_collection_interval": 60}
+  }},
+  "logs": {"logs_collected": {"files": {"collect_list": [
+    {"file_path": "/var/log/aiori-worker-bootstrap.log", "log_group_name": "%s", "log_stream_name": "$INSTANCE_ID/bootstrap", "timezone": "UTC"},
+    {"file_path": "/var/log/aiori-worker-agent.log", "log_group_name": "%s", "log_stream_name": "$INSTANCE_ID/agent", "timezone": "UTC"},
+    {"file_path": "/var/log/syslog", "log_group_name": "%s", "log_stream_name": "$INSTANCE_ID/syslog", "timezone": "UTC"}
+  ]}}}
+}
+CWEOF
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 `,
 		shellQuote(b.WorkerAgentURL), shellQuote(strings.ToLower(b.WorkerAgentSHA256)),
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),
 		shellQuote(b.DiskURL), shellQuote(strings.ToLower(b.DiskSHA256)),
-		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID), nil
+		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID, b.CloudWatchLogGroup, b.CloudWatchLogGroup, b.CloudWatchLogGroup), nil
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

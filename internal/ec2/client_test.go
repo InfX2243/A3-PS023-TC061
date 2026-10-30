@@ -2,6 +2,8 @@ package ec2
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -26,4 +28,14 @@ func TestLaunchRejectsUnsafeOrUnapprovedInputBeforeCallingAWS(t *testing.T) {
 
 func TestLifecycleRejectsTerminate(t *testing.T) {
 	if err:=(Client{Binary:"/missing"}).Action(context.Background(),"ap-south-1","i-123","terminate");err==nil { t.Fatal("terminate must not be available through this adapter") }
+}
+
+func TestLaunchDecodesAWSResponse(t *testing.T) {
+	binary:=filepath.Join(t.TempDir(),"aws")
+	script:="#!/bin/sh\nprintf '%s' '"+`{"Instances":[{"InstanceId":"i-abc123","InstanceType":"t3.micro","State":{"Name":"pending"},"Placement":{"AvailabilityZone":"ap-south-1a"}}]}`+"'\n"
+	if err:=os.WriteFile(binary,[]byte(script),0700);err!=nil { t.Fatal(err) }
+	client:=Client{Binary:binary}
+	instance,err:=client.Launch(context.Background(),LaunchInput{Name:"worker-test",Region:"ap-south-1",ImageID:"ami-123",InstanceType:"t3.micro",SubnetID:"subnet-123",SecurityGroupIDs:[]string{"sg-123"},ClientToken:"stable-form-token"})
+	if err!=nil { t.Fatal(err) }
+	if instance.ID!="i-abc123" || instance.State.Name!="pending" || instance.Placement.AvailabilityZone!="ap-south-1a" { t.Fatalf("unexpected EC2 response: %#v",instance) }
 }

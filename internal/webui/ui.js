@@ -92,9 +92,112 @@
     });
   }
 
+  function initLandingNavigation() {
+    var toggle = document.querySelector(".landing-menu-toggle");
+    var nav = document.getElementById("landing-navigation");
+    if (!toggle || !nav) return;
+
+    function closeMenu() {
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.setAttribute("aria-label", "Open navigation");
+      nav.classList.remove("is-open");
+    }
+    toggle.addEventListener("click", function () {
+      var expanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!expanded));
+      toggle.setAttribute("aria-label", expanded ? "Open navigation" : "Close navigation");
+      nav.classList.toggle("is-open", !expanded);
+    });
+    nav.querySelectorAll("a").forEach(function (link) {
+      link.addEventListener("click", closeMenu);
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        closeMenu();
+        toggle.focus();
+      }
+    });
+    document.addEventListener("click", function (event) {
+      if (!nav.contains(event.target) && !toggle.contains(event.target)) closeMenu();
+    });
+  }
+
+  function initLandingPreviewTabs() {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll("[data-preview-tab]"));
+    var panels = Array.prototype.slice.call(document.querySelectorAll("[data-preview-panel]"));
+    if (!tabs.length || !panels.length) return;
+
+    function activate(tab, moveFocus) {
+      var name = tab.getAttribute("data-preview-tab");
+      tabs.forEach(function (item) {
+        var active = item === tab;
+        item.classList.toggle("is-active", active);
+        item.setAttribute("aria-selected", String(active));
+        item.setAttribute("tabindex", active ? "0" : "-1");
+      });
+      panels.forEach(function (panel) {
+        panel.hidden = panel.getAttribute("data-preview-panel") !== name;
+      });
+      if (moveFocus) tab.focus();
+    }
+
+    tabs.forEach(function (tab, index) {
+      tab.setAttribute("tabindex", index === 0 ? "0" : "-1");
+      tab.addEventListener("click", function () { activate(tab, false); });
+      tab.addEventListener("keydown", function (event) {
+        if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
+        event.preventDefault();
+        var next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 :
+          (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+        activate(tabs[next], true);
+      });
+    });
+  }
+
+  function initLandingMotion() {
+    var revealItems = Array.prototype.slice.call(document.querySelectorAll("[data-reveal]"));
+    var progress = document.querySelector(".landing-progress span");
+    var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    revealItems.forEach(function (item) {
+      var delay = parseInt(item.getAttribute("data-reveal-delay") || "0", 10);
+      item.style.setProperty("--reveal-delay", (isNaN(delay) ? 0 : Math.min(delay, 300)) + "ms");
+    });
+
+    if (reduceMotion || !("IntersectionObserver" in window)) {
+      revealItems.forEach(function (item) { item.classList.add("is-visible"); });
+    } else {
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        });
+      }, { threshold: 0.12, rootMargin: "0px 0px -35px 0px" });
+      revealItems.forEach(function (item) { observer.observe(item); });
+    }
+
+    if (progress) {
+      var ticking = false;
+      function updateProgress() {
+        var doc = document.documentElement;
+        var max = doc.scrollHeight - window.innerHeight;
+        var amount = max > 0 ? Math.max(0, Math.min(1, window.scrollY / max)) : 0;
+        progress.style.width = (amount * 100) + "%";
+        ticking = false;
+      }
+      window.addEventListener("scroll", function () {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(updateProgress);
+      }, { passive: true });
+      updateProgress();
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initDocsNavigation();
     initFormFeedback();
-    initWorkspaceNavigation();
+    initWorkspaceNavigation();\n    initLandingNavigation();\n    initLandingPreviewTabs();\n    initLandingMotion();
   });
 }());

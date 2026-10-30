@@ -317,6 +317,7 @@ Resources:
           VM_CONTROLLER_CONTROLLER_PRIVATE_IP=$PRIVATE_IP
           VM_CONTROLLER_CONTROLLER_PUBLIC_IP=$PUBLIC_IP
           VM_CONTROLLER_WORKER_SECRET_PARAMETER=/aiori/${AWS::StackName}/worker/shared-secret
+          VM_CONTROLLER_WORKER_LOG_GROUP=/aiori/${AWS::StackName}/worker
           VM_CONTROLLER_SECURITY_GROUP_ID=${ControllerSecurityGroup}
           VM_CONTROLLER_DEFAULT_SUBNET_ID=${ControllerSubnet}
           VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID=${WorkerSecurityGroup}

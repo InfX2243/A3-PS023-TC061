@@ -210,6 +210,31 @@ func TestDashboardRendersControlCentreChartsAlertsAndScrollableWorkspace(t *test
 	}
 }
 
+func TestVirtualMachineNavigationUsesDedicatedAuthenticatedPage(t *testing.T) {
+	h, handler := newTestUI()
+	fake := h.service.(*fakeUIService)
+	fake.vms = []domain.VM{{ID:"vm-prod-01", Name:"Production API", WorkerID:"worker-a", VCPUs:2, MemoryBytes:2048*1024*1024, ImageID:"ubuntu-demo", Observed:domain.VMRunning}}
+	unauthenticated := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, "/vms", nil))
+	if unauthenticated.Code != http.StatusSeeOther || unauthenticated.Header().Get("Location") != "/login" {
+		t.Fatalf("unauthenticated VM inventory = %d, location %q", unauthenticated.Code, unauthenticated.Header().Get("Location"))
+	}
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/vms", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("VM inventory status = %d; body=%s", response.Code, response.Body.String()) }
+	body := response.Body.String()
+	for _, expected := range []string{"Virtual machines", "VM inventory", "Production API", "vm-prod-01", "worker-a", "2 vCPU", "2048 MiB memory", "href=\"/vms/new\"", "action=\"/vms/vm-prod-01/stop\""} {
+		if !strings.Contains(body, expected) { t.Errorf("VM inventory omitted %q", expected) }
+	}
+	if strings.Contains(body, "href=\"/console#vms\"") { t.Fatal("virtual machine navigation still points to a dashboard section") }
+}
+
 func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testing.T) {
 	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
 	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")

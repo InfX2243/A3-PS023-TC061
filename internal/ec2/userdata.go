@@ -94,6 +94,8 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 set -Eeuo pipefail
 exec > >(tee -a /var/log/aiori-worker-bootstrap.log | logger -t aiori-worker-bootstrap -s 2>/dev/console) 2>&1
 export DEBIAN_FRONTEND=noninteractive
+if [ "$(uname -m)" != "x86_64" ]; then echo "AIORI worker artifacts require an x86_64 AMI"; exit 1; fi
+if [ ! -x /usr/bin/apt-get ]; then echo "AIORI worker bootstrap requires an Ubuntu/Debian AMI"; exit 1; fi
 apt-get update
 apt-get install -y awscli ca-certificates curl ovmf
 install -d -m 0755 /opt/aiori /etc/aiori /var/lib/aiori-worker/runtime /var/lib/aiori-worker/images

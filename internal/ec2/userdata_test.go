@@ -28,7 +28,7 @@ func TestBuildUserDataInstallsVerifiedAgentAndUsesSSMSecret(t *testing.T) {
 	for _, expected := range []string{
 		"sha256sum --check --status", "aws ssm get-parameter", "--with-decryption",
 		"x86_64", "apt-get", "worker-agent", "cloud-hypervisor", "ovmf", "firmware_path", "/api/v1/worker/heartbeat",
-		"worker_endpoint", "worker_name", "aiori-worker-agent.service", "systemctl enable --now"
+		"worker_endpoint", "worker_name", "aiori-worker-agent.service", "systemctl enable --now",
 	} {
 		if !strings.Contains(script, expected) { t.Fatalf("bootstrap script omitted %q", expected) }
 	}

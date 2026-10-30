@@ -158,29 +158,49 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
 func (h *Handler) SetEC2Bootstrap(config ec2.BootstrapConfig) { h.ec2Bootstrap = config }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Instances []ec2.Instance; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
+type ec2InventoryRow struct { Instance ec2.Instance; Worker domain.Worker; HasWorker bool }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
 
 func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
 	region := r.URL.Query().Get("region")
 	if region == "" { region = os.Getenv("AWS_REGION"); if region == "" { region = os.Getenv("AWS_DEFAULT_REGION") } }
-	data := awsPageData{Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2.Instance{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
+	data := awsPageData{Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
+	workersByID := make(map[string]domain.Worker)
+	if h.service != nil {
+		workers, err := h.service.ListWorkers(r.Context())
+		if err != nil { data.InventoryError = "Could not load worker-agent health: " + err.Error() } else {
+			for _, worker := range workers { workersByID[worker.ID] = worker }
+		}
+	}
 	if h.ec2Client == nil {
 		if data.Error == "" { data.Error = "EC2 provisioning is unavailable. Configure AWS_REGION and the AWS SDK credential chain on the controller." }
 	} else if inventory, ok := h.ec2Client.(ec2InventoryProvisioner); ok {
 		instances, err := inventory.ListManaged(r.Context(), data.Region)
-		if err != nil { data.InventoryError = "Could not load managed EC2 inventory: " + err.Error() } else { data.Instances = instances }
+		if err != nil { data.InventoryError = "Could not load managed EC2 inventory: " + err.Error() } else {
+			for _, instance := range instances {
+				worker, enrolled := workersByID[instance.ID]
+				data.Instances = append(data.Instances, ec2InventoryRow{Instance: instance, Worker: worker, HasWorker: enrolled})
+			}
+		}
 	} else {
 		data.InventoryError = "The configured EC2 provider does not support instance inventory."
 	}
 	if id := r.URL.Query().Get("instance_id"); id != "" {
-		if h.ec2Client == nil { data.Error = "EC2 provisioning is not configured." } else if instance, err := h.ec2Client.Describe(r.Context(), data.Region, id); err != nil { data.Error = "Could not read EC2 lifecycle state: " + err.Error() } else { data.Instance = instance; data.HasInstance = true }
+		if h.ec2Client == nil { data.Error = "EC2 provisioning is not configured." } else if instance, err := h.ec2Client.Describe(r.Context(), data.Region, id); err != nil { data.Error = "Could not read EC2 lifecycle state: " + err.Error() } else {
+			data.Instance = instance
+			data.HasInstance = true
+			data.Agent, data.HasAgent = workersByID[instance.ID]
+		}
 	}
-	if data.BootstrapEnabled { bootstrap := h.ec2Bootstrap; bootstrap.NodeName = "aiori-worker-test"; if script, err := bootstrap.BuildUserData(); err == nil { data.UserData = script } else { data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error() } }
+	if data.BootstrapEnabled {
+		bootstrap := h.ec2Bootstrap
+		bootstrap.NodeName = "aiori-worker-test"
+		if script, err := bootstrap.BuildUserData(); err == nil { data.UserData = script } else { data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error() }
+	}
 	h.render(w, "aws", data)
 }
-
 func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
  h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
  r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token or form",http.StatusForbidden); return }

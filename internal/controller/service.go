@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -121,6 +123,28 @@ func workerState(value string) domain.WorkerState {
 }
 
 
+
+// Auto-enrollment is deliberately limited to literal private IP endpoints.
+// This prevents a worker holding the shared heartbeat secret from registering
+// an arbitrary public host that would receive controller-to-worker credentials.
+func validateAutoEnrollmentEndpoint(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return errors.New("endpoint must be a plain HTTP private-IP URL without credentials, path, query, or fragment")
+	}
+	ip := net.ParseIP(u.Hostname())
+	if ip == nil || !(ip.IsPrivate() || ip.IsLoopback()) {
+		return errors.New("endpoint host must be a private IP address")
+	}
+	port := u.Port()
+	if port == "" { return errors.New("endpoint must include an explicit port") }
+	var portNumber int
+	if _, err := fmt.Sscanf(port, "%d", &portNumber); err != nil || portNumber < 1024 || portNumber > 65535 {
+		return errors.New("endpoint port must be between 1024 and 65535")
+	}
+	return nil
+}
+
 func (s *Service) RecordWorkerHeartbeat(ctx context.Context, heartbeat workerhealth.Heartbeat) error {
 	now := s.now().UTC()
 	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
@@ -129,6 +153,7 @@ func (s *Service) RecordWorkerHeartbeat(ctx context.Context, heartbeat workerhea
 		err := tx.QueryRowContext(ctx, "SELECT memory_limit_bytes, endpoint FROM workers WHERE id = ?", heartbeat.WorkerID).Scan(&configuredLimit, &configuredEndpoint)
 		if errors.Is(err, sql.ErrNoRows) {
 			if strings.TrimSpace(heartbeat.Endpoint) == "" { return fmt.Errorf("unconfigured worker %q must include its agent endpoint to enroll", heartbeat.WorkerID) }
+			if err := validateAutoEnrollmentEndpoint(heartbeat.Endpoint); err != nil { return fmt.Errorf("worker %q advertised an unsafe agent endpoint: %w", heartbeat.WorkerID, err) }
 			candidate := s.cfg
 			candidate.Workers = []config.WorkerEndpoint{{ID: heartbeat.WorkerID, Name: heartbeat.Hostname, Endpoint: heartbeat.Endpoint, MemoryLimitMiB: heartbeat.ConfiguredMemoryCapBytes / (1024 * 1024)}}
 			if heartbeat.ConfiguredMemoryCapBytes%(1024*1024) != 0 || candidate.Workers[0].MemoryLimitMiB == 0 { return errors.New("new worker must report a whole-MiB positive memory cap") }

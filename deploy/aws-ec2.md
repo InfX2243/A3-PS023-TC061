@@ -22,7 +22,7 @@ Restrict these permissions to the intended account, region, AMIs, subnet/securit
 The UI shows a generated user-data preview when all bootstrap settings are present. The launch payload is a cloud-init script that:
 
 1. Installs the worker's bootstrap dependencies.
-2. Downloads the worker-agent, Cloud Hypervisor, kernel, and guest disk from HTTPS artifact URLs.
+2. Downloads the worker-agent, Cloud Hypervisor, and guest disk from HTTPS artifact URLs, and installs the Ubuntu OVMF package for UEFI guest firmware.
 3. Verifies every downloaded artifact against a required SHA-256 digest before installing it.
 4. Uses IMDSv2 to obtain the instance ID, private IPv4 address, and region.
 5. Retrieves the worker shared secret from SSM Parameter Store as a SecureString using the instance profile; the secret value is not embedded in user data.
@@ -34,7 +34,6 @@ Set these values in the controller's protected environment (see `.env.example` f
 - `VM_CONTROLLER_PUBLIC_URL`: HTTPS base URL reachable by the worker.
 - `VM_CONTROLLER_WORKER_AGENT_URL` and `VM_CONTROLLER_WORKER_AGENT_SHA256`.
 - `VM_CONTROLLER_CLOUD_HYPERVISOR_URL` and `VM_CONTROLLER_CLOUD_HYPERVISOR_SHA256`.
-- `VM_CONTROLLER_WORKER_KERNEL_URL` and `VM_CONTROLLER_WORKER_KERNEL_SHA256`.
 - `VM_CONTROLLER_WORKER_DISK_URL` and `VM_CONTROLLER_WORKER_DISK_SHA256`.
 - `VM_CONTROLLER_WORKER_SECRET_PARAMETER`: absolute SSM parameter path containing the worker shared secret.
 - `VM_CONTROLLER_WORKER_IMAGE_ID` and optional `VM_CONTROLLER_WORKER_MEMORY_LIMIT_MIB`.

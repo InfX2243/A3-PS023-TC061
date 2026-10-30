@@ -39,6 +39,7 @@ type fileConfig struct {
 	RequestTimeoutMS          int           `json:"request_timeout_ms"`
 	StartupTimeoutMS          int           `json:"startup_timeout_ms"`
 	ControllerHeartbeatURL    string        `json:"controller_heartbeat_url"`
+	WorkerEndpoint             string        `json:"worker_endpoint"`
 	HeartbeatIntervalSeconds  int           `json:"heartbeat_interval_seconds"`
 	Images                    []imageConfig `json:"images"`
 }
@@ -46,6 +47,7 @@ type fileConfig struct {
 type heartbeatPayload struct {
 	WorkerID string `json:"worker_id"`
 	Hostname string `json:"hostname"`
+	Endpoint string `json:"endpoint"`
 	AvailableMemoryBytes uint64 `json:"available_memory_bytes"`
 	ConfiguredMemoryCapBytes uint64 `json:"configured_memory_cap_bytes"`
 	CloudHypervisorHealthy bool `json:"cloud_hypervisor_healthy"`
@@ -153,7 +155,7 @@ func heartbeatLoop(ctx context.Context, cfg fileConfig, secret string) {
 		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		healthy := probeKVMAndVMM(probeCtx, cfg.CloudHypervisor)
 		cancel()
-		payload := heartbeatPayload{WorkerID: cfg.WorkerID, Hostname: hostname, AvailableMemoryBytes: available, ConfiguredMemoryCapBytes: cfg.MaxMemoryBytes, CloudHypervisorHealthy: healthy}
+		payload := heartbeatPayload{WorkerID: cfg.WorkerID, Hostname: hostname, Endpoint: cfg.WorkerEndpoint, AvailableMemoryBytes: available, ConfiguredMemoryCapBytes: cfg.MaxMemoryBytes, CloudHypervisorHealthy: healthy}
 		data, err := json.Marshal(payload)
 		if err != nil { slog.Warn("encode worker heartbeat", "error", err); return }
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.ControllerHeartbeatURL, strings.NewReader(string(data)))

@@ -108,11 +108,8 @@
     var path = window.location.pathname;
     document.querySelectorAll(".sidebar-nav .nav-link").forEach(function (link) {
       var href = link.getAttribute("href") || "";
-      var active = (path === "/console" && (href === "/console" || href === "/console#vms")) ||
-        (path === "/workers" && href === "/workers") ||
-        (path === "/aws" && href === "/aws") ||
-        (path === "/vms/new" && href === "/vms/new") ||
-        (path === "/docs" && href === "/docs");
+      var active = path === href ||
+        (path === "/console/" && href === "/console");
       if (active) { link.classList.add("is-active"); link.setAttribute("aria-current", "page"); }
       else { link.classList.remove("is-active"); link.removeAttribute("aria-current"); }
     });

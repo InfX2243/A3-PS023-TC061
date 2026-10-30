@@ -173,7 +173,7 @@ func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
 		t.Fatalf("documentation status = %d; body=%s", response.Code, response.Body.String())
 	}
 	body := response.Body.String()
-	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\"", "id=\"main-content\"", "Skip to main content", "/console", "aria-current=\"location\"", "font-size:16px", "/assets/ui.js"} {
+	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\"", "id=\"main-content\"", "Skip to main content", "/console", "aria-current=\"location\"", "font-size:16px", "/assets/ui.js", "docs-reading-progress", "docs-search", "Find a topic", "docs-back-top"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("documentation page omitted %q", expected)
 		}
@@ -252,7 +252,7 @@ func TestUIEnhancementAssetAndFormLoadingStates(t *testing.T) {
 	if !strings.HasPrefix(asset, "// Progressive enhancements for the server-rendered operator UI.\n(function () {") {
 		t.Fatal("enhancement asset is not emitted as a valid source file")
 	}
-	for _, expected := range []string{"IntersectionObserver", "aria-current", "Signing in…", "Signing out…", "prefers-reduced-motion"} {
+	for _, expected := range []string{"IntersectionObserver", "aria-current", "Signing in…", "Signing out…", "prefers-reduced-motion", "initDocsInteractions", "docs-code-copy", "clipboard.writeText"} {
 		if !strings.Contains(asset, expected) {
 			t.Fatalf("enhancement asset omitted %q", expected)
 		}

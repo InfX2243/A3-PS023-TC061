@@ -158,7 +158,7 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
 func (h *Handler) SetEC2Bootstrap(config ec2.BootstrapConfig) { h.ec2Bootstrap = config }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Instances []ec2.Instance; InventoryError string; BootstrapEnabled bool; Region, Error, Notice, CSRFToken, IdempotencyKey string }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Instances []ec2.Instance; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
 
 func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
@@ -177,6 +177,7 @@ func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	if id := r.URL.Query().Get("instance_id"); id != "" {
 		if h.ec2Client == nil { data.Error = "EC2 provisioning is not configured." } else if instance, err := h.ec2Client.Describe(r.Context(), data.Region, id); err != nil { data.Error = "Could not read EC2 lifecycle state: " + err.Error() } else { data.Instance = instance; data.HasInstance = true }
 	}
+	if data.BootstrapEnabled { if script, err := h.ec2Bootstrap.BuildUserData(); err == nil { data.UserData = script } else { data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error() } }
 	h.render(w, "aws", data)
 }
 
@@ -187,7 +188,7 @@ func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
  if !safeFormID(r.FormValue("client_token")) { http.Error(w,"invalid launch token; reload the form",http.StatusBadRequest); return }
  groups:=strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"),","," "))
  in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile")),ClientToken:r.FormValue("client_token")}
- if h.ec2Bootstrap.Enabled() { userData, err := h.ec2Bootstrap.BuildUserData(); if err != nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap configuration is invalid: "+err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; in.UserData = userData }
+ if h.ec2Bootstrap.Enabled() { if in.InstanceProfile == "" { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap requires an EC2 instance profile with ssm:GetParameter permission for the configured SecureString parameter.")+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; userData, err := h.ec2Bootstrap.BuildUserData(); if err != nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap configuration is invalid: "+err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; in.UserData = userData }
  instance,err:=h.ec2Client.Launch(r.Context(),in); if err!=nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape(err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }
  notice := "EC2 launch accepted without worker-agent bootstrap; this instance is not an enrolled worker."
  if h.ec2Bootstrap.Enabled() {

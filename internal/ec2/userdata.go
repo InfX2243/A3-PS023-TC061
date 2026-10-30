@@ -53,7 +53,7 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 func (b BootstrapConfig) Enabled() bool {
 	return b.ControllerURL != "" && b.WorkerAgentURL != "" && b.WorkerAgentSHA256 != "" &&
 		b.CloudHypervisorURL != "" && b.CloudHypervisorSHA256 != "" &&
-		b.DiskURL != "" && b.DiskSHA256 != "" && b.SecretParameter != "" && b.ControllerSecurityGroupID != "" && b.ImageID != ""
+		b.DiskURL != "" && b.DiskSHA256 != "" && b.SecretParameter != "" && b.ImageID != ""
 }
 
 func (b BootstrapConfig) BuildUserData() (string, error) {
@@ -75,7 +75,7 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 	} {
 		if !sha256Pattern.MatchString(sum) { return "", fmt.Errorf("%s SHA-256 must be 64 hexadecimal characters", name) }
 	}
-	if !validID(b.ControllerSecurityGroupID, "sg-") { return "", errors.New("VM_CONTROLLER_SECURITY_GROUP_ID must be a valid security group ID in the worker VPC") }
+	if b.ControllerSecurityGroupID != "" && !validID(b.ControllerSecurityGroupID, "sg-") { return "", errors.New("VM_CONTROLLER_SECURITY_GROUP_ID must be a valid security group ID in the worker VPC") }
 	if b.NodeName == "" { b.NodeName = "aiori-worker" }
 	if len(b.NodeName) > 128 { return "", errors.New("worker node name must be at most 128 characters") }
 	for _, r := range b.NodeName {

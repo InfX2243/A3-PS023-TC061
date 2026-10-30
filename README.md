@@ -22,7 +22,7 @@ Cloud Hypervisor requires KVM. Worker environment feasibility remains a deployme
 
 ## Deployment and infrastructure onboarding
 
-See [controller deployment and worker onboarding](deploy/README.md) and the [AWS EC2 test-node guide](deploy/aws-ec2.md). The authenticated console at `/aws` can launch a single tagged `t3.micro` or `t3.small` instance using the AWS SDK for Go v2 (no AWS CLI required). The AWS CLI uses its standard credential chain; credentials are never submitted by the browser. The workflow requires an existing AMI, subnet, and preconfigured security group and does not widen network access. It supports explicit start/stop and reads EC2 lifecycle state from AWS. Termination is deliberately not exposed.
+See [controller deployment and worker onboarding](deploy/README.md) and the [AWS EC2 test-node guide](deploy/aws-ec2.md). The authenticated console at `/aws` can launch a single tagged `t3.micro` or `t3.small` instance using the AWS SDK for Go v2 (no AWS CLI required). The AWS SDK uses its standard credential provider chain; credentials are never submitted by the browser. The workflow requires an existing AMI, subnet, and preconfigured security group and does not widen network access. It supports explicit start/stop and reads EC2 lifecycle state from AWS. Termination is deliberately not exposed.
 
 The EC2 workflow currently creates a cloud instance only; it does not bootstrap or register the worker agent. A `t3.micro` is useful for testing Linux bootstrap and network connectivity, not for KVM/Cloud Hypervisor guest workloads. Worker registrations are stored in SQLite and removing a registration never stops or terminates infrastructure. Agent health remains distinct from EC2 lifecycle state.
 

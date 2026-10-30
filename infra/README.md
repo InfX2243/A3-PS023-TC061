@@ -15,13 +15,12 @@ The controller instance is public so the operator can reach the initial console.
 
 ## Deploy
 
-1. Choose an Ubuntu 24.04 x86_64 AMI in your target region. The AMI must be available in that region.
+1. Choose an Ubuntu 24.04 x86_64 AMI in your target region. The template resolves the latest Canonical Ubuntu 24.04 amd64 AMI for the selected region through its public SSM parameter.
 2. Open **CloudFormation → Create stack → With new resources (standard)**.
 3. Upload `aiori-compute.yaml`.
 4. Supply:
    - Stack name, e.g. `aiori-dev`.
    - `AdminCIDR`: your current public IPv4 address with `/32` (do not use `0.0.0.0/0`).
-   - `Ubuntu2404AMI`: the region-specific Ubuntu 24.04 amd64 AMI ID.
    - `KeyName` is optional; SSM is the recommended access path.
    - `GitRef`: a branch, tag, or commit that contains the controller source. Use the deployment branch until its changes are merged.
 5. Acknowledge the IAM resource creation capability and create the stack.

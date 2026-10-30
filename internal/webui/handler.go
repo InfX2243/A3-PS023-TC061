@@ -484,7 +484,7 @@ const pageTemplates = `
   </article>
 </section>
 <section class="dashboard-alerts section-card" aria-label="Operational alerts" aria-live="polite">
-  <div class="section-head"><div><div class="section-title">Operational alerts</div><div class="section-subtitle">Signals that may need an operator's attention</div></div><span class="alert-count">{{countNonHealthyWorkers .Workers}} attention</span></div>
+  <div class="section-head"><div><div class="section-title">Operational alerts</div><div class="section-subtitle">Signals that may need an operator's attention</div></div><span class="alert-count">{{if gt (countNonHealthyWorkers .Workers) 0}}{{countNonHealthyWorkers .Workers}} attention{{else if gt (countActiveOperations .VMs) 0}}{{countActiveOperations .VMs}} in progress{{else}}0 active{{end}}</span></div>
   <div class="dashboard-alert-list">
     {{if gt (countNonHealthyWorkers .Workers) 0}}
     <article class="dashboard-alert dashboard-alert-warning" data-dashboard-alert><span class="dashboard-alert-symbol">!</span><div class="dashboard-alert-copy"><strong>Worker health needs attention</strong><p>{{countNonHealthyWorkers .Workers}} worker(s) are not currently reporting a healthy state. Review heartbeat freshness and agent connectivity.</p></div><a href="/workers">Review workers <span>↗</span></a><button type="button" class="alert-dismiss" data-alert-dismiss aria-label="Dismiss alert">×</button></article>

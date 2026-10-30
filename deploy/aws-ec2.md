@@ -83,4 +83,4 @@ go test ./...
 go run ./cmd/controller -config config.example.json
 ```
 
-Unit tests use a narrow EC2 API fake and do not make live AWS calls. A real launch incurs AWS charges and requires valid IAM permissions, a compatible Linux AMI, an instance profile, artifact URLs/checksums, SSM parameter, and same-VPC security groups. Cloud-init logs are written to `/var/log/aiori-worker-bootstrap.log` on the worker; inspect them through your approved SSH/SSM access path when bootstrap does not complete.
+Unit tests use a narrow EC2 API fake and do not make live AWS calls. A real launch incurs AWS charges and requires valid IAM permissions, a compatible Linux AMI, an instance profile, artifact URLs/checksums, SSM parameter, and same-VPC security groups. Cloud-init logs are written to `/var/log/aiori-worker-bootstrap.log` on the worker; inspect them through your approved SSH access path when bootstrap does not complete.

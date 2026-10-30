@@ -249,14 +249,14 @@ func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
      notice = "EC2 launch accepted with checksum-verified bootstrap and outbound platform telemetry. No controller security-group rule was added; ngrok supports worker-to-controller metrics uploads, but controller-to-worker VM RPC requires a private VPC path."
    } else {
      ingress, ok := h.ec2Client.(ec2IngressProvisioner)
-     if !ok { http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched, but the provider cannot configure private worker-agent ingress."),http.StatusSeeOther); return }
+     if !ok { http.Redirect(w,r,"/aws/instances/"+url.QueryEscape(instance.ID)+"?region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched, but the provider cannot configure private worker-agent ingress."),http.StatusSeeOther); return }
      if err := ingress.AllowControllerIngress(r.Context(), in.Region, instance.SecurityGroups, h.ec2Bootstrap.ControllerSecurityGroupID, h.ec2Bootstrap.AgentPort); err != nil {
        http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched with user data, but controller-to-worker network access could not be configured: "+err.Error()),http.StatusSeeOther); return
      }
      notice = "EC2 launch accepted with checksum-verified worker bootstrap and private controller-only agent ingress. Wait for cloud-init and the first authenticated heartbeat; agent health is shown separately in Worker inventory."
    }
  }
- http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape(notice)+"&name="+url.QueryEscape(in.Name),http.StatusSeeOther)
+ http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape(notice),http.StatusSeeOther)
 }
 
 func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {
@@ -264,7 +264,7 @@ func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {
  r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token",http.StatusForbidden); return }
  action,id:=r.PathValue("action"),r.PathValue("instanceID"); if action!="start" && action!="stop" && action!="terminate" { http.Error(w,"unsupported EC2 action",http.StatusBadRequest); return }
  if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
- region:=strings.TrimSpace(r.FormValue("region")); if err:=h.ec2Client.Action(r.Context(),region,id,action); err!=nil { http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(id)+"&region="+url.QueryEscape(region)+"&error="+url.QueryEscape(err.Error()),http.StatusSeeOther); return }
+ region:=strings.TrimSpace(r.FormValue("region")); if err:=h.ec2Client.Action(r.Context(),region,id,action); err!=nil { http.Redirect(w,r,"/aws/instances/"+url.QueryEscape(id)+"?region="+url.QueryEscape(region)+"&error="+url.QueryEscape(err.Error()),http.StatusSeeOther); return }
  http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(id)+"&region="+url.QueryEscape(region)+"&notice="+url.QueryEscape("EC2 "+action+" request accepted; refresh to confirm state."),http.StatusSeeOther)
 }
 func (h *Handler) workersPage(w http.ResponseWriter, r *http.Request) {

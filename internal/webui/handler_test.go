@@ -694,3 +694,34 @@ func TestPrepareVMPageUsesFixedNavigationAndLiveConfigurationPreview(t *testing.
   if !strings.Contains(jsResponse.Body.String(), "initPrepareVMInteractions") { t.Fatal("prepare VM interactions were not served") }
   _ = h
 }
+
+
+func TestAWSPagePrefillsCloudFormationProvisioningDefaults(t *testing.T) {
+	t.Setenv("VM_CONTROLLER_DEFAULT_SUBNET_ID", "subnet-0123456789abcdef0")
+	t.Setenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID", "sg-0123456789abcdef0")
+	t.Setenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE", "aiori-worker-profile")
+	t.Setenv("VM_CONTROLLER_DEFAULT_IMAGE_ID", "ami-0123456789abcdef0")
+	t.Setenv("VM_CONTROLLER_CLOUDWATCH_DASHBOARD_URL", "https://example.test/cloudwatch")
+	h, handler := newTestUI()
+	h.SetEC2Provisioner(&fakeEC2Inventory{})
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/aws", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("AWS page status=%d body=%s", response.Code, response.Body.String()) }
+	body := response.Body.String()
+	for _, expected := range []string{
+		"value=\"subnet-0123456789abcdef0\"",
+		"value=\"sg-0123456789abcdef0\"",
+		"value=\"aiori-worker-profile\"",
+		"value=\"ami-0123456789abcdef0\"",
+		"Open CloudWatch metrics and logs",
+		"https://example.test/cloudwatch",
+	} {
+		if !strings.Contains(body, expected) { t.Errorf("AWS page omitted CloudFormation default %q", expected) }
+	}
+}

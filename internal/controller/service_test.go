@@ -272,4 +272,6 @@ func TestAutoEnrollmentRejectsMissingOrUnsafeEndpoint(t *testing.T) {
 	if err := svc.RecordWorkerHeartbeat(context.Background(), base); err == nil { t.Fatal("expected missing endpoint to be rejected") }
 	base.Endpoint = "http://user:password@10.0.1.15:9090"
 	if err := svc.RecordWorkerHeartbeat(context.Background(), base); err == nil { t.Fatal("expected credential-bearing endpoint to be rejected") }
+	base.Endpoint = "http://198.51.100.15:9090"
+	if err := svc.RecordWorkerHeartbeat(context.Background(), base); err == nil { t.Fatal("expected public endpoint to be rejected") }
 }

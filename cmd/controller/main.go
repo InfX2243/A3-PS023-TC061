@@ -72,7 +72,9 @@ func main() {
 	awsRegion := os.Getenv("AWS_REGION")
 	if awsRegion == "" { awsRegion = os.Getenv("AWS_DEFAULT_REGION") }
 	ui.SetEC2Provisioner(ec2.Client{Region: awsRegion})
-	ui.SetEC2Bootstrap(ec2.BootstrapConfigFromEnv())
+	bootstrap := ec2.BootstrapConfigFromEnv()
+	bootstrap.WorkerSharedSecret = cfg.WorkerSharedSecret
+	ui.SetEC2Bootstrap(bootstrap)
 	metricsStore := observability.NewStore()
 	ui.SetMetricsStore(metricsStore)
 	observability.Handler{Store: metricsStore, WorkerSecret: cfg.WorkerSharedSecret, OperatorToken: cfg.OperatorToken}.Register(mux)

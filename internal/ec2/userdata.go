@@ -172,7 +172,7 @@ systemctl enable --now aiori-worker-agent
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),
 		shellQuote(b.KernelURL), shellQuote(strings.ToLower(b.KernelSHA256)),
 		shellQuote(b.DiskURL), shellQuote(strings.ToLower(b.DiskSHA256)),
-		shellQuote(b.SecretParameter), b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID, b.NodeName), nil
+		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID), nil
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

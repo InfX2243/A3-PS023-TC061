@@ -1,0 +1,35 @@
+name: Release worker agent
+
+on:
+  push:
+    tags:
+      - "worker-agent-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-worker-agent:
+    name: Build Linux worker agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build static Linux amd64 agent
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/worker-agent-linux-amd64 ./cmd/worker-agent
+          cd dist
+          sha256sum worker-agent-linux-amd64 > SHA256SUMS
+      - name: Publish immutable release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/worker-agent-linux-amd64
+            dist/SHA256SUMS

@@ -310,6 +310,10 @@ Resources:
           umask 077
           cat > /etc/aiori/controller.env <<EOF
           VM_CONTROLLER_OPERATOR_TOKEN=$OPERATOR_TOKEN
+          VM_CONTROLLER_PUBLIC_URL=http://$PRIVATE_IP:8080
+          VM_CONTROLLER_WORKER_AGENT_PORT=9090
+          VM_CONTROLLER_WORKER_MEMORY_LIMIT_MIB=4096
+          VM_CONTROLLER_WORKER_IMAGE_ID=ubuntu-demo
           VM_CONTROLLER_WORKER_SHARED_SECRET=$(aws ssm get-parameter --region "$REGION" --name '/aiori/${AWS::StackName}/worker/shared-secret' --with-decryption --query 'Parameter.Value' --output text)
           AWS_REGION=$REGION
           AWS_DEFAULT_REGION=$REGION

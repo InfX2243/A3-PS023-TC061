@@ -514,3 +514,5 @@ body.dashboard-body{height:100vh;min-height:100vh;overflow:hidden;overscroll-beh
 @media(prefers-reduced-motion:reduce){
  .dashboard-chart-card,.dashboard-alert,.dashboard-alert *,.dashboard-refresh,.dashboard-chart-body *{transition:none!important;animation:none!important}
 }
+
+.state-dot-failed{background:#d95365}.state-bar-failed{background:#d95365}

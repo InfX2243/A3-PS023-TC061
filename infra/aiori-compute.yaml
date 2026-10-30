@@ -321,6 +321,7 @@ Resources:
           VM_CONTROLLER_DEFAULT_SUBNET_ID=${ControllerSubnet}
           VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID=${WorkerSecurityGroup}
           VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE=${WorkerInstanceProfile}
+          VM_CONTROLLER_DEFAULT_IMAGE_ID=${Ubuntu2404AMI}
           EOF
           unset OPERATOR_TOKEN
           chmod 0600 /etc/aiori/controller.env /etc/aiori/config.json

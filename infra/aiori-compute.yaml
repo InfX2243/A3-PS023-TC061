@@ -394,6 +394,9 @@ Resources:
           ]
         }
 Outputs:
+  VPCId:
+    Description: Dedicated AIORI VPC.
+    Value: !Ref AioriVPC
   ControllerInstanceId:
     Description: Controller EC2 instance ID.
     Value: !Ref ControllerInstance

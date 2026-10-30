@@ -450,9 +450,25 @@ func TestSharedDesignSystemStylesheetIsServedAndApplied(t *testing.T) {
 		}
 	}
 
-	page := httptest.NewRecorder()
-	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/", nil))
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `<link rel="stylesheet" href="/assets/ui.css">`) {
-		t.Fatalf("public landing page did not receive shared stylesheet: status=%d", page.Code)
+	login := httptest.NewRecorder()
+	handler.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret")))
+	if login.Code != http.StatusSeeOther {
+		t.Fatalf("test login status = %d", login.Code)
+	}
+	cookie := login.Result().Cookies()[0]
+	pages := []string{"/", "/docs", "/login", "/console", "/workers", "/aws", "/vms/new"}
+	for _, path := range pages {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		if path != "/" && path != "/docs" && path != "/login" {
+			request.AddCookie(cookie)
+		}
+		page := httptest.NewRecorder()
+		handler.ServeHTTP(page, request)
+		if page.Code != http.StatusOK {
+			t.Fatalf("%s returned status %d", path, page.Code)
+		}
+		if !strings.Contains(page.Body.String(), `<link rel="stylesheet" href="/assets/ui.css">`) {
+			t.Fatalf("%s did not receive the shared design system stylesheet", path)
+		}
 	}
 }

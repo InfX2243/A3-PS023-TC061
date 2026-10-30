@@ -133,6 +133,7 @@ func TestLaunchEnablesNestedVirtualizationForC8iWorker(t *testing.T) {
 		Name: "aiori-kvm-worker", ImageID: "ami-123", InstanceType: "c8i.xlarge", ClientToken: "kvm-worker-token",
 	})
 	if err != nil { t.Fatal(err) }
+	if f.run.MetadataOptions == nil || f.run.MetadataOptions.HttpTokens != types.HttpTokensStateRequired || f.run.MetadataOptions.HttpPutResponseHopLimit == nil || aws.ToInt32(f.run.MetadataOptions.HttpPutResponseHopLimit) != 1 { t.Fatalf("launch must require IMDSv2: %#v", f.run.MetadataOptions) }
 	if f.run.CpuOptions == nil || f.run.CpuOptions.NestedVirtualization != types.NestedVirtualizationSpecificationEnabled {
 		t.Fatalf("c8i launch did not request nested virtualization: %#v", f.run.CpuOptions)
 	}

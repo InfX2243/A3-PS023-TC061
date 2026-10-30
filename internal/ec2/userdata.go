@@ -25,6 +25,7 @@ type BootstrapConfig struct {
 	SecretParameter string
 	ControllerSecurityGroupID string
 	ImageID string
+	NodeName string
 	MemoryLimitMiB uint64
 	AgentPort int
 }
@@ -81,6 +82,13 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 		if !sha256Pattern.MatchString(sum) { return "", fmt.Errorf("%s SHA-256 must be 64 hexadecimal characters", name) }
 	}
 	if !validID(b.ControllerSecurityGroupID, "sg-") { return "", errors.New("VM_CONTROLLER_SECURITY_GROUP_ID must be a valid security group ID in the worker VPC") }
+	if b.NodeName == "" { b.NodeName = "aiori-worker" }
+	if len(b.NodeName) > 128 { return "", errors.New("worker node name must be at most 128 characters") }
+	for _, r := range b.NodeName {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' || r == ' ') {
+			return "", errors.New("worker node name contains unsupported characters")
+		}
+	}
 	if !imageNamePattern.MatchString(b.ImageID) { return "", errors.New("worker image ID must be a safe identifier") }
 	if !strings.HasPrefix(b.SecretParameter, "/") || len(b.SecretParameter) > 1011 || strings.ContainsAny(b.SecretParameter, "\r\n") {
 		return "", errors.New("worker secret parameter must be an absolute SSM parameter path")
@@ -163,7 +171,7 @@ systemctl enable --now aiori-worker-agent
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),
 		shellQuote(b.KernelURL), shellQuote(strings.ToLower(b.KernelSHA256)),
 		shellQuote(b.DiskURL), shellQuote(strings.ToLower(b.DiskSHA256)),
-		shellQuote(b.SecretParameter), b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID), nil
+		shellQuote(b.SecretParameter), b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID, b.NodeName), nil
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

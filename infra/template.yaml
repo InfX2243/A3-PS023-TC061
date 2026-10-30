@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Aiori Compute network, controller host, worker IAM/security boundary and CloudWatch dashboard.
+Description: Aiori Compute network, controller host, worker IAM/security boundary and platform-native observability.
 Parameters:
   OperatorIngressCidr:
     Type: String
@@ -112,7 +112,6 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: sts:AssumeRole}]
-      ManagedPolicyArns: [arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy]
       Policies:
         - PolicyName: AioriWorkerSecretRead
           PolicyDocument:
@@ -130,7 +129,6 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: sts:AssumeRole}]
-      ManagedPolicyArns: [arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy]
       Policies:
         - PolicyName: AioriControllerOperations
           PolicyDocument:
@@ -145,21 +143,9 @@ Resources:
               - Effect: Allow
                 Action: [ssm:PutParameter, ssm:GetParameter]
                 Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aiori/*'
-              - Effect: Allow
-                Action: [cloudwatch:GetMetricData, cloudwatch:GetMetricStatistics, cloudwatch:ListMetrics]
-                Resource: '*'
-              - Effect: Allow
-                Action: [logs:DescribeLogGroups, logs:DescribeLogStreams, logs:FilterLogEvents, logs:GetLogEvents]
-                Resource: '*'
   ControllerInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties: {Roles: [!Ref ControllerRole]}
-  ControllerLogs:
-    Type: AWS::Logs::LogGroup
-    Properties: {LogGroupName: /aiori/controller, RetentionInDays: 30}
-  WorkerLogs:
-    Type: AWS::Logs::LogGroup
-    Properties: {LogGroupName: /aiori/workers, RetentionInDays: 30}
   Controller:
     Type: AWS::EC2::Instance
     DependsOn: DefaultRoute
@@ -178,7 +164,7 @@ Resources:
         Fn::Base64:
           Fn::Join:
             - ''
-            - - "#!/bin/bash\nset -euo pipefail\nexec > >(tee /var/log/aiori-bootstrap.log) 2>&1\ndnf install -y awscli2 amazon-cloudwatch-agent\nmkdir -p /etc/aiori /var/lib/aiori\ncurl --fail --silent --show-error --location '"
+            - - "#!/bin/bash\nset -euo pipefail\nexec > >(tee /var/log/aiori-bootstrap.log) 2>&1\ndnf install -y awscli2\nmkdir -p /etc/aiori /var/lib/aiori\ncurl --fail --silent --show-error --location '"
               - !Ref ControllerArtifactUrl
               - "' -o /tmp/aiori-controller\necho '"
               - !Ref ControllerArtifactSha256
@@ -214,7 +200,7 @@ Resources:
               - !Ref WorkerInstanceProfile
               - "\nVM_CONTROLLER_DEFAULT_WORKER_AMI_ID="
               - !Ref WorkerAmi
-              - "\nEOF\nchmod 0600 /etc/aiori/controller.env\ncat >/etc/aiori/config.json <<'EOF'\n{\"listen_addr\":\"0.0.0.0:8080\",\"database_path\":\"/var/lib/aiori/controller.db\",\"max_vcpus\":16,\"max_memory_mib\":32768,\"memory_safety_reserve_mib\":1024,\"allowed_images\":[\"ubuntu-demo\"],\"workers\":[],\"secure_cookies\":true,\"shutdown_timeout_seconds\":20}\nEOF\ncat >/etc/systemd/system/aiori-controller.service <<'EOF'\n[Unit]\nDescription=Aiori Compute controller\nAfter=network-online.target\nWants=network-online.target\n[Service]\nType=simple\nUser=root\nEnvironmentFile=/etc/aiori/controller.env\nExecStart=/usr/local/bin/aiori-controller -config /etc/aiori/config.json\nRestart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\nEOF\nsystemctl daemon-reload\nsystemctl enable --now aiori-controller\ncat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWCONFIG'\n{\"agent\":{\"metrics_collection_interval\":60},\"metrics\":{\"namespace\":\"Aiori/Controller\",\"append_dimensions\":{\"InstanceId\":\"${aws:InstanceId}\"},\"metrics_collected\":{\"cpu\":{\"measurement\":[\"cpu_usage_idle\",\"cpu_usage_user\",\"cpu_usage_system\"],\"totalcpu\":true},\"mem\":{\"measurement\":[\"mem_used_percent\"]},\"disk\":{\"measurement\":[\"used_percent\"],\"resources\":[\"/\"]}}},\"logs\":{\"logs_collected\":{\"files\":{\"collect_list\":[{\"file_path\":\"/var/log/aiori-bootstrap.log\",\"log_group_name\":\"/aiori/controller\",\"log_stream_name\":\"bootstrap\"},{\"file_path\":\"/var/log/messages\",\"log_group_name\":\"/aiori/controller\",\"log_stream_name\":\"system\"}]}}}}\nCWCONFIG\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
+              - "\nEOF\nchmod 0600 /etc/aiori/controller.env\ncat >/etc/aiori/config.json <<'EOF'\n{\"listen_addr\":\"0.0.0.0:8080\",\"database_path\":\"/var/lib/aiori/controller.db\",\"max_vcpus\":16,\"max_memory_mib\":32768,\"memory_safety_reserve_mib\":1024,\"allowed_images\":[\"ubuntu-demo\"],\"workers\":[],\"secure_cookies\":true,\"shutdown_timeout_seconds\":20}\nEOF\ncat >/etc/systemd/system/aiori-controller.service <<'EOF'\n[Unit]\nDescription=Aiori Compute controller\nAfter=network-online.target\nWants=network-online.target\n[Service]\nType=simple\nUser=root\nEnvironmentFile=/etc/aiori/controller.env\nExecStart=/usr/local/bin/aiori-controller -config /etc/aiori/config.json\nRestart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\nEOF\nsystemctl daemon-reload\nsystemctl enable --now aiori-controller"
   ControllerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -239,12 +225,6 @@ Resources:
       Protocol: HTTPS
       Certificates: [{CertificateArn: !Ref CertificateArn}]
       DefaultActions: [{Type: forward, TargetGroupArn: !Ref ControllerTargetGroup}]
-  AioriDashboard:
-    Type: AWS::CloudWatch::Dashboard
-    Properties:
-      DashboardName: Aiori-Compute
-      DashboardBody: !Sub |
-        {"widgets":[{"type":"metric","width":12,"height":6,"properties":{"title":"Controller CPU","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/EC2","CPUUtilization","InstanceId","${Controller}"],[{"expression":"SEARCH(\"{Aiori/Worker,InstanceId} MetricName=cpu_usage_user\", \"Average\", 300)","label":"Worker CPU user","id":"e1"}],[{"expression":"SEARCH(\"{Aiori/Worker,InstanceId} MetricName=mem_used_percent\", \"Average\", 300)","label":"Worker memory used %","id":"e2"}]],"period":300,"stat":"Average"}},{"type":"log","width":24,"height":8,"properties":{"title":"Controller and worker logs","region":"${AWS::Region}","logGroupNames":["/aiori/controller","/aiori/workers"],"query":"fields @timestamp, @logStream, @message | sort @timestamp desc | limit 100"}}]}
 Outputs:
   VpcId: {Description: VPC ID, Value: !Ref AioriVPC}
   ControllerInstanceId: {Description: Controller EC2 instance ID, Value: !Ref Controller}
@@ -254,4 +234,3 @@ Outputs:
   WorkerSubnetId: {Description: Default worker subnet, Value: !Ref PublicSubnetA}
   ControllerURL: {Description: HTTPS URL, Value: !Sub 'https://${DomainName}'}
   LoadBalancerDNSName: {Description: ALB DNS name, Value: !GetAtt ApplicationLoadBalancer.DNSName}
-  CloudWatchDashboardURL: {Description: CloudWatch dashboard URL, Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=Aiori-Compute'}

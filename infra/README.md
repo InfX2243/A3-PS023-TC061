@@ -15,7 +15,7 @@ The controller instance is public so the operator can reach the initial console.
 
 ## Deploy
 
-1. Choose an Ubuntu 24.04 x86_64 AMI in your target region. The template resolves the latest Canonical Ubuntu 24.04 amd64 AMI for the selected region through its public SSM parameter.
+1. The template automatically resolves the latest Canonical Ubuntu 24.04 amd64 AMI for the selected region through its public SSM parameter.
 2. Open **CloudFormation → Create stack → With new resources (standard)**.
 3. Upload `aiori-compute.yaml`.
 4. Supply:

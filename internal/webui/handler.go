@@ -162,14 +162,14 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
 func (h *Handler) SetEC2Bootstrap(config ec2.BootstrapConfig) { h.ec2Bootstrap = config }
 type ec2InventoryRow struct { Instance ec2.Instance; Worker domain.Worker; HasWorker bool }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; DefaultSubnetID, DefaultWorkerSecurityGroupID, DefaultWorkerInstanceProfile, DefaultImageID string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
 
 func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
 	region := r.URL.Query().Get("region")
 	if region == "" { region = os.Getenv("AWS_REGION"); if region == "" { region = os.Getenv("AWS_DEFAULT_REGION") } }
-	data := awsPageData{Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
+	data := awsPageData{DefaultSubnetID: os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID"), DefaultWorkerSecurityGroupID: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID"), DefaultWorkerInstanceProfile: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE"), DefaultImageID: os.Getenv("VM_CONTROLLER_DEFAULT_IMAGE_ID"), Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
 	workersByID := make(map[string]domain.Worker)
 	if h.service != nil {
 		workers, err := h.service.ListWorkers(r.Context())
@@ -212,7 +212,7 @@ func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
  if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
  if !safeFormID(r.FormValue("client_token")) { http.Error(w,"invalid launch token; reload the form",http.StatusBadRequest); return }
  groups:=strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"),","," "))
- in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile")),ClientToken:r.FormValue("client_token")}
+ in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile")),ClientToken:r.FormValue("client_token")}\n if in.SubnetID == "" { in.SubnetID = strings.TrimSpace(os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID")) }\n if len(in.SecurityGroupIDs) == 0 { if group := strings.TrimSpace(os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID")); group != "" { in.SecurityGroupIDs = []string{group} } }\n if in.InstanceProfile == "" { in.InstanceProfile = strings.TrimSpace(os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE")) }\n if in.ImageID == "" { in.ImageID = strings.TrimSpace(os.Getenv("VM_CONTROLLER_DEFAULT_IMAGE_ID")) }
  if h.ec2Bootstrap.Enabled() { if in.InstanceProfile == "" { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap requires an EC2 instance profile with ssm:GetParameter permission for the configured SecureString parameter.")+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; bootstrap := h.ec2Bootstrap; bootstrap.NodeName = in.Name; userData, err := bootstrap.BuildUserData(); if err != nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap configuration is invalid: "+err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; in.UserData = userData }
  instance,err:=h.ec2Client.Launch(r.Context(),in); if err!=nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape(err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }
  notice := "EC2 launch accepted without worker-agent bootstrap; this instance is not an enrolled worker."

@@ -16,11 +16,13 @@ type fakeAPI struct {
 	describeOut *ec2.DescribeInstancesOutput
 	describeInputs []*ec2.DescribeInstancesInput
 	started, stopped []string
+	ingress *ec2.AuthorizeSecurityGroupIngressInput
 }
 func (f *fakeAPI) RunInstances(_ context.Context, in *ec2.RunInstancesInput, _ ...func(*ec2.Options)) (*ec2.RunInstancesOutput,error) { f.run=in; return f.runOut,nil }
 func (f *fakeAPI) DescribeInstances(_ context.Context, in *ec2.DescribeInstancesInput, _ ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput,error) { f.describeInputs=append(f.describeInputs,in); return f.describeOut,nil }
 func (f *fakeAPI) StartInstances(_ context.Context, in *ec2.StartInstancesInput, _ ...func(*ec2.Options)) (*ec2.StartInstancesOutput,error) { f.started=in.InstanceIds; return &ec2.StartInstancesOutput{},nil }
 func (f *fakeAPI) StopInstances(_ context.Context, in *ec2.StopInstancesInput, _ ...func(*ec2.Options)) (*ec2.StopInstancesOutput,error) { f.stopped=in.InstanceIds; return &ec2.StopInstancesOutput{},nil }
+func (f *fakeAPI) AuthorizeSecurityGroupIngress(_ context.Context, in *ec2.AuthorizeSecurityGroupIngressInput, _ ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupIngressOutput,error) { f.ingress=in; return &ec2.AuthorizeSecurityGroupIngressOutput{},nil }
 
 func TestValidID(t *testing.T) {
 	for _, tc := range []struct{v,p string; want bool}{{"ami-123","ami-",true},{"subnet-ab12","subnet-",true},{"sg-ab12","sg-",true},{"ami-","ami-",false},{"ami-abc/def","ami-",false},{"i-123","i-",true}} {
@@ -90,4 +92,15 @@ func TestListManagedFiltersControllerOwnedInstancesAndMapsDetails(t *testing.T) 
 	if instance.PublicIP != "203.0.113.10" || instance.PrivateIP != "10.0.1.12" || instance.VPCID != "vpc-123" || instance.SubnetID != "subnet-123" || instance.KeyName != "ops-key" { t.Fatalf("missing network/connection metadata: %#v", instance) }
 	if len(instance.SecurityGroups) != 1 || instance.SecurityGroups[0] != "sg-123" || !instance.LaunchTime.Equal(launched) { t.Fatalf("missing security group/launch metadata: %#v", instance) }
 	if len(f.describeInputs) != 1 || len(f.describeInputs[0].Filters) != 1 || aws.ToString(f.describeInputs[0].Filters[0].Name) != "tag:ManagedBy" || len(f.describeInputs[0].Filters[0].Values) != 1 || f.describeInputs[0].Filters[0].Values[0] != "aiori-controller" { t.Fatal("inventory query did not filter to controller-owned resources") }
+}
+
+func TestAllowControllerIngressUsesOnlySourceSecurityGroup(t *testing.T) {
+	f := &fakeAPI{}
+	err := (Client{Region: "ap-south-1", API: f}).AllowControllerIngress(context.Background(), "", []string{"sg-worker123"}, "sg-control123", 9090)
+	if err != nil { t.Fatal(err) }
+	if f.ingress == nil || aws.ToString(f.ingress.GroupId) != "sg-worker123" || len(f.ingress.IpPermissions) != 1 { t.Fatalf("unexpected ingress request: %#v", f.ingress) }
+	permission := f.ingress.IpPermissions[0]
+	if aws.ToString(permission.IpProtocol) != "tcp" || aws.ToInt32(permission.FromPort) != 9090 || aws.ToInt32(permission.ToPort) != 9090 { t.Fatalf("unexpected port permission: %#v", permission) }
+	if len(permission.UserIdGroupPairs) != 1 || aws.ToString(permission.UserIdGroupPairs[0].GroupId) != "sg-control123" || len(permission.IpRanges) != 0 { t.Fatalf("ingress must be restricted to controller SG, got %#v", permission) }
+	if err := (Client{Region: "ap-south-1", API: f}).AllowControllerIngress(context.Background(), "", []string{"sg-worker123"}, "sg-control123", 22); err == nil { t.Fatal("must reject unexpected low port") }
 }

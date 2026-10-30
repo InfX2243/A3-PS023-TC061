@@ -138,7 +138,7 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
-	if h.service == nil { h.renderStatus(w, http.StatusServiceUnavailable, "dashboard", dashboardData{Error:"Controller service is not initialized.", CSRFToken:h.csrfToken(r),IdempotencyKey:newFormID()}); return }
+	if h.service == nil { h.renderStatus(w, http.StatusServiceUnavailable, "dashboard", dashboardData{Error:"Controller service is not initialized.", CSRFToken:h.csrfToken(r)}); return }
 	workers, err := h.service.ListWorkers(r.Context())
 	if err != nil { h.renderStatus(w, http.StatusInternalServerError, "dashboard", dashboardData{Error:"Could not load worker inventory.", CSRFToken:h.csrfToken(r)}); return }
 	vms, err := h.service.ListVMs(r.Context())

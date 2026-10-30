@@ -78,14 +78,17 @@ func (c Client) Launch(ctx context.Context, in LaunchInput) (Instance, error) {
 	if !regionPattern.MatchString(in.Region) {
 		return Instance{}, errors.New("a valid AWS region is required")
 	}
-	if !validID(in.ImageID, "ami-") || !validID(in.SubnetID, "subnet-") {
-		return Instance{}, errors.New("a valid AMI ID and subnet ID are required")
+	if !validID(in.ImageID, "ami-") {
+		return Instance{}, errors.New("a valid AMI ID is required")
+	}
+	if in.SubnetID != "" && !validID(in.SubnetID, "subnet-") {
+		return Instance{}, errors.New("subnet ID must be a valid subnet- identifier when provided")
 	}
 	if in.InstanceType != "t3.micro" && in.InstanceType != "t3.small" {
 		return Instance{}, errors.New("only t3.micro and t3.small are enabled for the initial test workflow")
 	}
-	if len(in.SecurityGroupIDs) == 0 || len(in.SecurityGroupIDs) > 5 {
-		return Instance{}, errors.New("provide between one and five preconfigured security groups")
+	if len(in.SecurityGroupIDs) > 5 {
+		return Instance{}, errors.New("provide no more than five security groups")
 	}
 	for _, id := range in.SecurityGroupIDs {
 		if !validID(id, "sg-") {
@@ -111,8 +114,6 @@ func (c Client) Launch(ctx context.Context, in LaunchInput) (Instance, error) {
 		InstanceType:     types.InstanceType(in.InstanceType),
 		MinCount:         aws.Int32(1),
 		MaxCount:         aws.Int32(1),
-		SubnetId:         aws.String(in.SubnetID),
-		SecurityGroupIds: in.SecurityGroupIDs,
 		ClientToken:      aws.String(in.ClientToken),
 		TagSpecifications: []types.TagSpecification{{
 			ResourceType: types.ResourceTypeInstance,
@@ -123,6 +124,9 @@ func (c Client) Launch(ctx context.Context, in LaunchInput) (Instance, error) {
 			},
 		}},
 	}
+	// If network IDs are omitted, EC2 uses the default subnet and security group in the default VPC.
+	if in.SubnetID != "" { input.SubnetId = aws.String(in.SubnetID) }
+	if len(in.SecurityGroupIDs) > 0 { input.SecurityGroupIds = in.SecurityGroupIDs }
 	if in.KeyName != "" {
 		input.KeyName = aws.String(in.KeyName)
 	}

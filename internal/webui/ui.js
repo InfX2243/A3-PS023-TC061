@@ -199,6 +199,9 @@
   document.addEventListener("DOMContentLoaded", function () {
     initDocsNavigation();
     initFormFeedback();
-    initWorkspaceNavigation();\n    initLandingNavigation();\n    initLandingPreviewTabs();\n    initLandingMotion();
+    initWorkspaceNavigation();
+    initLandingNavigation();
+    initLandingPreviewTabs();
+    initLandingMotion();
   });
 }());

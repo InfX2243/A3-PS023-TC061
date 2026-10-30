@@ -22,11 +22,11 @@ Cloud Hypervisor requires KVM. Worker environment feasibility remains a deployme
 
 ## Deployment and infrastructure onboarding
 
-See [controller deployment and worker onboarding](deploy/README.md) for the EC2 controller setup, systemd unit, TLS reverse-proxy example, durable SQLite storage, secret handling, and bring-your-own-worker checklist. A small `t3.micro` is a controller candidate only; worker hosts must independently satisfy KVM/Cloud Hypervisor requirements.
+See [controller deployment and worker onboarding](deploy/README.md) and the [AWS EC2 test-node guide](deploy/aws-ec2.md). The authenticated console at `/aws` can launch a single tagged `t3.micro` or `t3.small` instance using the AWS CLI installed on the controller. The AWS CLI uses its standard credential chain; credentials are never submitted by the browser. The workflow requires an existing AMI, subnet, and preconfigured security group and does not widen network access. It supports explicit start/stop and reads EC2 lifecycle state from AWS. Termination is deliberately not exposed.
 
-The controller now supports a persistent worker registry in the console at `/workers`. Registrations are stored in SQLite and survive controller restarts. Removing a registration removes controller metadata only; it does not terminate cloud infrastructure. Agent health (healthy, stale, unreachable) is distinct from authoritative cloud lifecycle state. AWS EC2 lifecycle status and start/stop/terminate actions require a separately configured AWS integration and least-privilege IAM permissions; they must not be inferred from heartbeat loss.
+The EC2 workflow currently creates a cloud instance only; it does not bootstrap or register the worker agent. A `t3.micro` is useful for testing Linux bootstrap and network connectivity, not for KVM/Cloud Hypervisor guest workloads. Worker registrations are stored in SQLite and removing a registration never stops or terminates infrastructure. Agent health remains distinct from EC2 lifecycle state.
 
-Copy `.env.example` to a local `.env`, replace the operator token, operator password, and worker shared secret with independent values, set an operator username, and run `chmod 600 .env`. The browser UI supports username/password sign-in; the operator token remains the API bearer secret and session-signing key. The controller loads a local `.env` without shell evaluation and does not override environment variables already set by the process. Never commit `.env` or real credentials. Production deployments should supply secrets through the service manager's protected environment file or a secret manager.
+Copy `.env.example` to a local `.env`, replace the operator token, operator password, and worker shared secret with independent values, set an operator username, and run `chmod 600 .env`. The controller loads a local `.env` without shell evaluation and does not override environment variables already set by the process. For EC2 integration, install AWS CLI v2 and configure `AWS_REGION` plus the standard AWS credential chain, preferably an attached IAM role. Never commit `.env` or real credentials. Production deployments should supply secrets through the service manager's protected environment file or a secret manager.
 
 ## Development setup
 
@@ -45,10 +45,3 @@ Runtime secrets are read from environment variables, not JSON config:
 - `VM_CONTROLLER_WORKER_SHARED_SECRET`
 
 The operator token protects the UI and controller API; the worker shared secret protects heartbeats and controller-to-worker lifecycle calls. Configure trusted worker endpoints in the controller JSON before expecting placement to succeed. The worker agent requires `VM_CONTROLLER_WORKER_SHARED_SECRET` to authorize lifecycle requests. Start it with `go run ./cmd/worker-agent -config worker.example.json` after staging the configured Cloud Hypervisor binary and allowlisted image artifacts. Never expose the worker API or Cloud Hypervisor Unix socket publicly. Do not commit real credentials. Runtime database files under `data/` are ignored by Git.
-
-## Current verification status
-
-- The user reported that `go test ./...` passed for the controller, config, domain, store, and workerhealth packages, and verified `GET /healthz` returns HTTP 200 with `{"status":"ok"}`.
-- The Cloud Hypervisor adapter test initially failed because the Unix-socket test path under macOS's `t.TempDir()` was too long. The test now creates its socket in a short `/tmp` path; the fix still needs a fresh local `go test ./...` run. Worker lifecycle tests have been added but are also pending execution.
-- KVM/Cloud Hypervisor host feasibility, the pinned Cloud Hypervisor release, and the guest image remain unverified. Do not treat a passing unit suite as evidence that a real VM can boot.
-- The implementation-first workflow continues through remaining tasks while execution and deployment checks are recorded as pending. See [the task plan](docs/tasks.md) for per-task status and evidence.

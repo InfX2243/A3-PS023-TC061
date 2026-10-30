@@ -741,6 +741,7 @@ func authenticatedEC2LaunchRequest(t *testing.T, h *Handler, handler http.Handle
 		"client_token":{"form-token-123456"},
 		"name":{"aiori-worker-test"},
 		"region":{"ap-south-1"},
+		"controller_url":{"https://controller.example.test"},
 		"image_id":{"ami-0123456789abcdef0"},
 		"instance_type":{"c8i.xlarge"},
 		"instance_profile":{"aiori-worker-ssm"},

@@ -463,9 +463,12 @@ const pageTemplates = `
     <div class="section-head"><div><div class="section-title">Workload distribution</div><div class="section-subtitle">Observed VM states across the controller inventory</div></div><span class="chart-live-label"><i></i> INVENTORY SNAPSHOT</span></div>
     <div class="dashboard-chart-body">
       <div class="state-chart" role="img" aria-label="Virtual machine counts by observed state">
-        {{range $state := (slice "running" "stopped" "starting" "stopping" "unknown" "defined")}}
-        <div class="state-chart-row"><span class="state-chart-label"><i class="state-dot state-dot-{{$state}}"></i>{{$state}}</span><span class="state-chart-track"><i class="state-chart-bar state-bar-{{$state}}" style="width:{{percentOf (countVMState $.VMs $state) (len $.VMs)}}%"></i></span><strong>{{countVMState $.VMs $state}}</strong></div>
-        {{end}}
+        <div class="state-chart-row"><span class="state-chart-label"><i class="state-dot state-dot-running"></i>running</span><span class="state-chart-track"><i class="state-chart-bar state-bar-running" style="width:{{percentOf (countVMState .VMs "running") (len .VMs)}}%"></i></span><strong>{{countVMState .VMs "running"}}</strong></div>
+        <div class="state-chart-row"><span class="state-chart-label"><i class="state-dot state-dot-stopped"></i>stopped</span><span class="state-chart-track"><i class="state-chart-bar state-bar-stopped" style="width:{{percentOf (countVMState .VMs "stopped") (len .VMs)}}%"></i></span><strong>{{countVMState .VMs "stopped"}}</strong></div>
+        <div class="state-chart-row"><span class="state-chart-label"><i class="state-dot state-dot-starting"></i>starting</span><span class="state-chart-track"><i class="state-chart-bar state-bar-starting" style="width:{{percentOf (countVMState .VMs "starting") (len .VMs)}}%"></i></span><strong>{{countVMState .VMs "starting"}}</strong></div>
+        <div class="state-chart-row"><span class="state-chart-label"><i class="state-dot state-dot-stopping"></i>stopping</span><span class="state-chart-track"><i class="state-chart-bar state-bar-stopping" style="width:{{percentOf (countVMState .VMs "stopping") (len .VMs)}}%"></i></span><strong>{{countVMState .VMs "stopping"}}</strong></div>
+        <div class="state-chart-row"><span class="state-chart-label"><i class="state-dot state-dot-unknown"></i>unknown</span><span class="state-chart-track"><i class="state-chart-bar state-bar-unknown" style="width:{{percentOf (countVMState .VMs "unknown") (len .VMs)}}%"></i></span><strong>{{countVMState .VMs "unknown"}}</strong></div>
+        <div class="state-chart-row"><span class="state-chart-label"><i class="state-dot state-dot-defined"></i>defined</span><span class="state-chart-track"><i class="state-chart-bar state-bar-defined" style="width:{{percentOf (countVMState .VMs "defined") (len .VMs)}}%"></i></span><strong>{{countVMState .VMs "defined"}}</strong></div>
       </div>
       <div class="chart-summary"><strong>{{len .VMs}}</strong><span>tracked workloads</span><small>Counts reflect observed state, not requested intent.</small></div>
     </div>

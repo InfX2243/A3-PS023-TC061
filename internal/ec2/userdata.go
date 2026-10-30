@@ -71,7 +71,7 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 		"disk URL": b.DiskURL,
 	} {
 		u, err := url.Parse(raw)
-		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (name == "controller URL" && u.Path != "" && u.Path != "/") {
 			return "", fmt.Errorf("%s must be an HTTPS URL without credentials, query, or fragment", name)
 		}
 	}
@@ -118,6 +118,7 @@ IMDS='http://169.254.169.254/latest/meta-data'
 INSTANCE_ID=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$IMDS/instance-id")
 LOCAL_IPV4=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$IMDS/local-ipv4")
 REGION=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$IMDS/placement/region")
+CPU_COUNT=$(nproc)
 WORKER_SECRET=$(aws ssm get-parameter --region "$REGION" --name %s --with-decryption --query 'Parameter.Value' --output text)
 test -n "$WORKER_SECRET"
 umask 077
@@ -130,7 +131,7 @@ cat > /etc/aiori/worker.json <<EOF
   "listen_addr": "0.0.0.0:%d",
   "runtime_dir": "/var/lib/aiori-worker/runtime",
   "cloud_hypervisor_path": "/usr/local/bin/cloud-hypervisor",
-  "max_vcpus": 8,
+  "max_vcpus": $CPU_COUNT,
   "max_memory_bytes": %d,
   "request_timeout_ms": 2000,
   "startup_timeout_ms": 10000,

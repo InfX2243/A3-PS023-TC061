@@ -155,6 +155,7 @@
   }
 
   function initLandingMotion() {
+    document.body.classList.add("landing-motion-ready");
     var revealItems = Array.prototype.slice.call(document.querySelectorAll("[data-reveal]"));
     var progress = document.querySelector(".landing-progress span");
     var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

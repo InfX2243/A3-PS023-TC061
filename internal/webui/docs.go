@@ -126,7 +126,7 @@ const docsPageTemplate = `
 .docs-table tbody tr:hover{background:#f8f8ff}
 .docs-code{border:1px solid #26314b;border-radius:12px;padding:18px 18px 18px;box-shadow:0 10px 24px #10182a14}
 .docs-code pre{padding-right:74px}
-.docs-code-copy{position:absolute;top:11px;right:11px;display:inline-flex;align-items:center;gap:6px;border:1px solid #ffffff26;border-radius:7px;background:#ffffff12;color:#e8eaff;padding:7px 10px;font:600 11px/1.2 inherit;cursor:pointer;transition:background .16s,border-color .16s,transform .16s}
+.docs-code-copy{position:absolute;top:11px;right:11px;display:inline-flex;align-items:center;gap:6px;border:1px solid #ffffff26;border-radius:7px;background:#ffffff12;color:#e8eaff;padding:7px 10px;font-family:inherit;font-size:11px;font-weight:700;line-height:1.2;cursor:pointer;transition:background .16s,border-color .16s,transform .16s}
 .docs-code-copy:hover{background:#ffffff24;border-color:#ffffff55;transform:translateY(-1px)}
 .docs-code-copy:active{transform:translateY(0) scale(.97)}
 .docs-code-copy:focus-visible{outline:2px solid #aaa8ff;outline-offset:3px}
@@ -202,7 +202,6 @@ go run ./cmd/controller -config config.example.json</pre></div><p>The example co
 <aside class="docs-aside"><div class="docs-aside-card"><div class="docs-aside-title">On this page</div><a href="#getting-started">Quick start</a><a href="#architecture">Request flow</a><a href="#virtual-machines">Create a VM</a><a href="#lifecycle">State reference</a><a href="#security">Security model</a><a href="#troubleshooting">Troubleshooting</a><a class="docs-aside-cta" href="/login">Open operator console →</a></div></aside>
 </div>
 <footer class="docs-footer"><span>Aiori Compute · Engineering preview</span><span>Documentation is public; infrastructure actions require operator authentication.</span><span><a href="/login">Operator sign in</a></span></footer>
-<a class="docs-back-top" href="#main-content" aria-label="Back to top" title="Back to top">↑</a>
 <a class="docs-back-top" href="#main-content" aria-label="Back to top" title="Back to top">↑</a>
 <script src="/assets/ui.js" defer></script>
 </body></html>{{end}}

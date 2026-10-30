@@ -2,6 +2,7 @@ package ec2
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -113,4 +114,14 @@ func TestDescribeAndActionsRejectUnmanagedInstance(t *testing.T) {
 	if _, err := client.Describe(context.Background(), "", "i-other"); err == nil { t.Fatal("unmanaged instance must not be inspectable through managed-node route") }
 	if err := client.Action(context.Background(), "", "i-other", "stop"); err == nil { t.Fatal("unmanaged instance must not be controlled") }
 	if len(f.stopped) != 0 { t.Fatal("stop request was sent for an unmanaged instance") }
+}
+
+func TestLaunchBase64EncodesCloudInitUserData(t *testing.T) {
+	f := &fakeAPI{runOut: &ec2.RunInstancesOutput{Instances: []types.Instance{{InstanceId: aws.String("i-bootstrap123")}}}}
+	script := "#!/bin/bash\necho bootstrapped\n"
+	_, err := (Client{Region: "ap-south-1", API: f}).Launch(context.Background(), LaunchInput{
+		Name: "worker", ImageID: "ami-123", InstanceType: "t3.micro", ClientToken: "bootstrap-token", UserData: script,
+	})
+	if err != nil { t.Fatal(err) }
+	if got := aws.ToString(f.run.UserData); got != base64.StdEncoding.EncodeToString([]byte(script)) { t.Fatalf("user data = %q, want base64-encoded script", got) }
 }

@@ -137,7 +137,7 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
-	if h.service == nil { h.renderStatus(w, http.StatusServiceUnavailable, "dashboard", dashboardData{Error:"Controller service is not initialized.", CSRFToken:h.csrfToken(r)}); return }
+	if h.service == nil { h.renderStatus(w, http.StatusServiceUnavailable, "dashboard", dashboardData{Error:"Controller service is not initialized.", CSRFToken:h.csrfToken(r),IdempotencyKey:newFormID()}); return }
 	workers, err := h.service.ListWorkers(r.Context())
 	if err != nil { h.renderStatus(w, http.StatusInternalServerError, "dashboard", dashboardData{Error:"Could not load worker inventory.", CSRFToken:h.csrfToken(r)}); return }
 	vms, err := h.service.ListVMs(r.Context())
@@ -153,7 +153,7 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Region, Error, Notice, CSRFToken string }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Region, Error, Notice, CSRFToken, IdempotencyKey string }
 
 func (h *Handler) awsPage(w http.ResponseWriter,r *http.Request) {
  h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
@@ -167,8 +167,9 @@ func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
  h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
  r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token or form",http.StatusForbidden); return }
  if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
+ if !safeFormID(r.FormValue("client_token")) { http.Error(w,"invalid launch token; reload the form",http.StatusBadRequest); return }
  groups:=strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"),","," "))
- in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile"))}
+ in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile")),ClientToken:r.FormValue("client_token")}
  instance,err:=h.ec2Client.Launch(r.Context(),in); if err!=nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape(err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }
  http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape("EC2 launch accepted. Install the worker agent and register it separately."),http.StatusSeeOther)
 }

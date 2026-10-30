@@ -47,9 +47,10 @@ aws cloudformation deploy \
     CertificateArn=arn:aws:acm:ap-south-1:ACCOUNT_ID:certificate/CERTIFICATE_ID \
     ControllerArtifactUrl=https://ARTIFACT_HOST/releases/aiori-controller \
     ControllerArtifactSha256=64_CHARACTER_SHA256
+    WorkerAgentUrl=https://ARTIFACT_HOST/releases/worker-agent \\\n    WorkerAgentSha256=64_CHARACTER_SHA256 \\\n    CloudHypervisorUrl=https://ARTIFACT_HOST/releases/cloud-hypervisor \\\n    CloudHypervisorSha256=64_CHARACTER_SHA256 \\\n    GuestDiskUrl=https://ARTIFACT_HOST/images/guest-disk.img \\\n    GuestDiskSha256=64_CHARACTER_SHA256
 ```
 
-The current first-cut stack accepts the controller artifact URL and checksum. The worker agent, Cloud Hypervisor, and guest disk artifacts are intentionally separate inputs to the worker-bootstrap configuration; do not launch compute workers until those immutable artifacts and their matching digests are configured. The application must also receive the stack's worker subnet, worker security group, worker instance profile, and controller security group as deployment defaults. These values are available as CloudFormation outputs and are not secrets.
+The stack injects the pinned worker-agent, Cloud Hypervisor, and guest-disk artifact URLs/checksums plus the VPC subnet, security groups, worker instance profile, AMI, SSM parameter name, and public controller URL into the controller service environment. The EC2 launch form is pre-filled from those values. Use the same artifact digest that was published alongside each immutable release.
 
 Retrieve outputs:
 

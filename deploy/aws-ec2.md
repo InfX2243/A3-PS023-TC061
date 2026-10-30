@@ -19,6 +19,20 @@ Restrict these permissions to the intended account, region, AMIs, subnet/securit
 
 ## 2. Automatic worker bootstrap configuration
 
+**Worker user data is mandatory for launches from the `/aws` console.** The controller now builds and validates the complete cloud-init script before invoking EC2 `RunInstances`. If any required bootstrap setting is missing or invalid, or if the worker instance profile is absent, the request is rejected and AWS is never called. There is no longer a successful EC2-only fallback from this page. The launch button is also disabled in the UI until the configuration is valid; the server-side check remains authoritative.
+
+Configure these values in the controller process environment (or its `.env`) and restart it:
+
+- `VM_CONTROLLER_PUBLIC_URL`: public HTTPS controller origin; use the current ngrok HTTPS origin for local testing
+- `VM_CONTROLLER_WORKER_AGENT_URL` and `VM_CONTROLLER_WORKER_AGENT_SHA256`
+- `VM_CONTROLLER_CLOUD_HYPERVISOR_URL` and `VM_CONTROLLER_CLOUD_HYPERVISOR_SHA256`
+- `VM_CONTROLLER_WORKER_DISK_URL` and `VM_CONTROLLER_WORKER_DISK_SHA256`
+- `VM_CONTROLLER_WORKER_SECRET_PARAMETER`: SSM SecureString parameter name
+- `VM_CONTROLLER_WORKER_IMAGE_ID`: image ID written into the worker agent config
+- `VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE`: instance profile name with permission to read only that SSM parameter
+
+Artifact URLs must be reachable by the instance over HTTPS and their SHA-256 checksums must match the downloaded files. Do not use placeholder URLs/checksums in a real launch. For ngrok, restart the controller after changing the public URL and create a new instance; user data is fixed at launch time.
+
 The UI shows a generated user-data preview when all bootstrap settings are present. The launch payload is a cloud-init script that:
 
 1. Installs the worker's bootstrap dependencies.

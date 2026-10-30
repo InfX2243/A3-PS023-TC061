@@ -59,10 +59,10 @@ func TestLaunchRejectsUnsafeInputBeforeCallingAWS(t *testing.T) {
 }
 
 func TestDescribeAndActionsUseSDK(t *testing.T) {
-	f:=&fakeAPI{describeOut:&ec2.DescribeInstancesOutput{Reservations:[]types.Reservation{{Instances:[]types.Instance{{InstanceId:aws.String("i-123"),PrivateIpAddress:aws.String("10.0.0.2"),Tags:[]types.Tag{{Key:aws.String("ManagedBy"),Value:aws.String("aiori-controller")}},Placement:&types.Placement{AvailabilityZone:aws.String("ap-south-1a")}}}}}}}
+	f:=&fakeAPI{describeOut:&ec2.DescribeInstancesOutput{Reservations:[]types.Reservation{{Instances:[]types.Instance{{InstanceId:aws.String("i-123"),PrivateIpAddress:aws.String("10.0.0.2"),Tags:[]types.Tag{{Key:aws.String("ManagedBy"),Value:aws.String("aiori-controller")}},Placement:&types.Placement{AvailabilityZone:aws.String("ap-south-1a")},CpuOptions:&types.CpuOptions{NestedVirtualization:types.NestedVirtualizationSpecificationEnabled}}}}}}}
 	c:=Client{Region:"ap-south-1",API:f}
 	got,err:=c.Describe(context.Background(),"","i-123")
-	if err!=nil || got.PrivateIP!="10.0.0.2" || got.Placement.AvailabilityZone!="ap-south-1a" { t.Fatalf("describe=%#v err=%v",got,err) }
+	if err!=nil || got.PrivateIP!="10.0.0.2" || got.Placement.AvailabilityZone!="ap-south-1a" || got.NestedVirtualization!="enabled" { t.Fatalf("describe=%#v err=%v",got,err) }
 	if err:=c.Action(context.Background(),"","i-123","start"); err!=nil { t.Fatal(err) }
 	if err:=c.Action(context.Background(),"","i-123","stop"); err!=nil { t.Fatal(err) }
 	if len(f.started)!=1 || f.started[0]!="i-123" || len(f.stopped)!=1 { t.Fatal("SDK lifecycle API was not called") }
@@ -124,4 +124,15 @@ func TestLaunchBase64EncodesCloudInitUserData(t *testing.T) {
 	})
 	if err != nil { t.Fatal(err) }
 	if got := aws.ToString(f.run.UserData); got != base64.StdEncoding.EncodeToString([]byte(script)) { t.Fatalf("user data = %q, want base64-encoded script", got) }
+}
+
+func TestLaunchEnablesNestedVirtualizationForC8iWorker(t *testing.T) {
+	f := &fakeAPI{runOut: &ec2.RunInstancesOutput{Instances: []types.Instance{{InstanceId: aws.String("i-kvm123")}}}}
+	_, err := (Client{Region: "ap-south-1", API: f}).Launch(context.Background(), LaunchInput{
+		Name: "aiori-kvm-worker", ImageID: "ami-123", InstanceType: "c8i.xlarge", ClientToken: "kvm-worker-token",
+	})
+	if err != nil { t.Fatal(err) }
+	if f.run.CpuOptions == nil || f.run.CpuOptions.NestedVirtualization != types.NestedVirtualizationSpecificationEnabled {
+		t.Fatalf("c8i launch did not request nested virtualization: %#v", f.run.CpuOptions)
+	}
 }

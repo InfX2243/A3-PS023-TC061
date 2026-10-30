@@ -98,6 +98,9 @@ if [ "$(uname -m)" != "x86_64" ]; then echo "AIORI worker artifacts require an x
 if [ ! -x /usr/bin/apt-get ]; then echo "AIORI worker bootstrap requires an Ubuntu/Debian AMI"; exit 1; fi
 apt-get update
 apt-get install -y awscli ca-certificates curl ovmf
+# Install the AWS-published CloudWatch Agent package for Ubuntu amd64.
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -o /tmp/amazon-cloudwatch-agent.deb
+dpkg -i /tmp/amazon-cloudwatch-agent.deb
 install -d -m 0755 /opt/aiori /etc/aiori /var/lib/aiori-worker/runtime /var/lib/aiori-worker/images
 download_verified() {
   local url="$1" destination="$2" checksum="$3" mode="$4"
@@ -162,6 +165,26 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 systemctl enable --now aiori-worker-agent
+cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWCONFIG'
+{
+  "agent": {"metrics_collection_interval": 60, "run_as_user": "root"},
+  "metrics": {
+    "namespace": "Aiori/Worker",
+    "append_dimensions": {"InstanceId": "${aws:InstanceId}", "InstanceType": "${aws:InstanceType}"},
+    "metrics_collected": {
+      "cpu": {"measurement": ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"], "totalcpu": true},
+      "mem": {"measurement": ["mem_used_percent", "mem_available"},
+      "disk": {"measurement": ["used_percent", "inodes_free"], "resources": ["/"]},
+      "net": {"measurement": ["bytes_sent", "bytes_recv"], "resources": ["eth0"]}
+    }
+  },
+  "logs": {"logs_collected": {"files": {"collect_list": [
+    {"file_path": "/var/log/aiori-worker-bootstrap.log", "log_group_name": "/aiori/workers", "log_stream_name": "{instance_id}/bootstrap"},
+    {"file_path": "/var/log/syslog", "log_group_name": "/aiori/workers", "log_stream_name": "{instance_id}/system"}
+  ]}}}
+}
+CWCONFIG
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 `,
 		shellQuote(b.WorkerAgentURL), shellQuote(strings.ToLower(b.WorkerAgentSHA256)),
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),

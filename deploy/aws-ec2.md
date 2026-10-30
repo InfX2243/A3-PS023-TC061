@@ -65,9 +65,9 @@ The Worker inventory refreshes every 15 seconds and shows endpoint, last heartbe
 
 ## 5. Instance type and compute readiness
 
-The current launch form exposes `t3.micro` and `t3.small` as connectivity/bootstrap test profiles only. They are not KVM/Cloud Hypervisor worker hosts. Their agent can enroll and report health telemetry, but the hypervisor probe will remain unavailable and VM scheduling must not use them.
+The launch form exposes `t3.micro` and `t3.small` as connectivity/bootstrap test profiles only. Their agent can enroll and report telemetry, but they are not KVM/Cloud Hypervisor compute hosts and must not receive VM workloads.
 
-A real compute worker requires a supported KVM-capable host, a verified `/dev/kvm`, compatible Cloud Hypervisor, and verified guest artifacts. Do not infer virtualization readiness from a successful EC2 launch or agent heartbeat. The EC2 nested-virtualization launch option and a c8i feasibility instance remain a separate platform integration gate; the current SDK launch profile does not claim to enable nested virtualization.
+The `c8i.xlarge` profile explicitly sends `CpuOptions.NestedVirtualization=enabled` through the upgraded AWS SDK. This is the intended first compute-worker candidate from the AWS feasibility gate. It is still a candidate until the launched AMI/kernel exposes usable `/dev/kvm`, the agent's KVM/VMM probe succeeds, and a real guest boot/stop cycle passes. Check region capacity, service quota, and current On-Demand price before launch. Do not infer virtualization readiness from a successful EC2 launch or heartbeat alone.
 
 ## 6. Connect and operate
 

@@ -251,6 +251,9 @@ func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testi
 	if !strings.Contains(body, "href=\"/docs\"") {
 		t.Fatal("dashboard navigation omitted documentation link")
 	}
+	if !strings.Contains(body, "href=\"/vms\"") || strings.Contains(body, "id=\"vms\"") {
+		t.Fatal("dashboard must link to the dedicated VM inventory instead of exposing a VM section destination")
+	}
 	if strings.Contains(body, "Your compute fleet, at a glance.") {
 		t.Fatal("dashboard retained the duplicate hero message")
 	}
@@ -380,6 +383,7 @@ func TestPrimaryPagesExposeKeyboardSkipNavigation(t *testing.T) {
 		{path: "/docs", cookie: false},
 		{path: "/login", cookie: false},
 		{path: "/console", cookie: true},
+		{path: "/vms", cookie: true},
 		{path: "/vms/new", cookie: true},
 	}
 	for _, page := range pages {
@@ -528,7 +532,7 @@ func TestSharedDesignSystemStylesheetIsServedAndApplied(t *testing.T) {
 	if !strings.Contains(stylesheet.Header().Get("Content-Type"), "text/css") {
 		t.Fatalf("stylesheet content type = %q", stylesheet.Header().Get("Content-Type"))
 	}
-	for _, token := range []string{"--ai-purple: #5145e5", ".sidebar-nav", ".marketing-hero", "@media (max-width:620px)"} {
+	for _, token := range []string{"--ai-purple: #5145e5", ".sidebar-nav", ".nav-link:active", ".workspace-shortcuts", ".vm-inventory-summary", ".marketing-hero", "@media (max-width:620px)"} {
 		if !strings.Contains(stylesheet.Body.String(), token) {
 			t.Fatalf("design system stylesheet omitted %q", token)
 		}
@@ -542,7 +546,7 @@ func TestSharedDesignSystemStylesheetIsServedAndApplied(t *testing.T) {
 		t.Fatalf("test login status = %d", login.Code)
 	}
 	cookie := login.Result().Cookies()[0]
-	pages := []string{"/", "/docs", "/login", "/console", "/workers", "/aws", "/vms/new"}
+	pages := []string{"/", "/docs", "/login", "/console", "/workers", "/vms", "/aws", "/vms/new"}
 	for _, path := range pages {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		if path != "/" && path != "/docs" && path != "/login" {

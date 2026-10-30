@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aiori Compute network, controller host, worker IAM/security boundary and CloudWatch dashboard.
+Parameters:
+  OperatorIngressCidr:
+    Type: String
+    Description: Trusted operator/VPN CIDR allowed to access HTTPS.
+  DomainName:
+    Type: String
+    Description: DNS name covered by the ACM certificate and mapped to the ALB.
+  CertificateArn:
+    Type: String
+    Description: Issued ACM certificate ARN in this region.
+  ControllerArtifactUrl:
+    Type: String
+    Description: Immutable HTTPS URL for the Linux amd64 controller binary.
+  ControllerArtifactSha256:
+    Type: String
+    AllowedPattern: '[A-Fa-f0-9]{64}'
+  ControllerInstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.micro, t3.small, t3.medium]
+  ControllerAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+Resources:
+  AioriVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.40.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{Key: Name, Value: aiori-vpc}]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: {VpcId: !Ref AioriVPC, InternetGatewayId: !Ref InternetGateway}
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AioriVPC
+      CidrBlock: 10.40.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AioriVPC
+      CidrBlock: 10.40.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref AioriVPC}
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties: {RouteTableId: !Ref PublicRouteTable, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref InternetGateway}
+  RouteA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicSubnetA, RouteTableId: !Ref PublicRouteTable}
+  RouteB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicSubnetB, RouteTableId: !Ref PublicRouteTable}
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS from trusted operators
+      VpcId: !Ref AioriVPC
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: !Ref OperatorIngressCidr}
+  ControllerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Controller accepts traffic only from ALB
+      VpcId: !Ref AioriVPC
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 8080, ToPort: 8080, SourceSecurityGroupId: !Ref ALBSecurityGroup}
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Worker API reachable only from controller security group
+      VpcId: !Ref AioriVPC
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 9090, ToPort: 9090, SourceSecurityGroupId: !Ref ControllerSecurityGroup}
+      Tags: [{Key: ManagedBy, Value: aiori-controller}]
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: sts:AssumeRole}]
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy]
+      Policies:
+        - PolicyName: AioriWorkerSecretRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ssm:GetParameter]
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aiori/worker/shared-secret'
+  WorkerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: {Roles: [!Ref WorkerRole]}
+  ControllerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: sts:AssumeRole}]
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy]
+      Policies:
+        - PolicyName: AioriControllerOperations
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ec2:RunInstances, ec2:DescribeInstances, ec2:StartInstances, ec2:StopInstances, ec2:TerminateInstances, ec2:CreateTags, ec2:AuthorizeSecurityGroupIngress, ec2:DescribeSubnets, ec2:DescribeSecurityGroups, ec2:DescribeImages]
+                Resource: '*'
+              - Effect: Allow
+                Action: [iam:PassRole]
+                Resource: !GetAtt WorkerRole.Arn
+              - Effect: Allow
+                Action: [ssm:PutParameter, ssm:GetParameter]
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aiori/*'
+              - Effect: Allow
+                Action: [cloudwatch:GetMetricData, cloudwatch:GetMetricStatistics, cloudwatch:ListMetrics]
+                Resource: '*'
+              - Effect: Allow
+                Action: [logs:DescribeLogGroups, logs:DescribeLogStreams, logs:FilterLogEvents, logs:GetLogEvents]
+                Resource: '*'
+  ControllerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: {Roles: [!Ref ControllerRole]}
+  ControllerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: /aiori/controller, RetentionInDays: 30}
+  WorkerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: /aiori/workers, RetentionInDays: 30}
+  Controller:
+    Type: AWS::EC2::Instance
+    DependsOn: DefaultRoute
+    Properties:
+      ImageId: !Ref ControllerAmi
+      InstanceType: !Ref ControllerInstanceType
+      IamInstanceProfile: !Ref ControllerInstanceProfile
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroupIds: [!Ref ControllerSecurityGroup]
+      MetadataOptions: {HttpEndpoint: enabled, HttpTokens: required, HttpPutResponseHopLimit: 1}
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: {VolumeSize: 30, VolumeType: gp3, Encrypted: true, DeleteOnTermination: false}
+      Tags: [{Key: Name, Value: aiori-controller}, {Key: ManagedBy, Value: aiori-controller}, {Key: Role, Value: controller}]
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - ''
+            - - "#!/bin/bash\nset -euo pipefail\nexec > >(tee /var/log/aiori-bootstrap.log) 2>&1\ndnf install -y awscli2 amazon-cloudwatch-agent\nmkdir -p /etc/aiori /var/lib/aiori\ncurl --fail --silent --show-error --location '"
+              - !Ref ControllerArtifactUrl
+              - "' -o /tmp/aiori-controller\necho '"
+              - !Ref ControllerArtifactSha256
+              - "  /tmp/aiori-controller' | sha256sum --check -\ninstall -m 0755 /tmp/aiori-controller /usr/local/bin/aiori-controller\nTOKEN=$(openssl rand -hex 32)\nPASSWORD=$(openssl rand -hex 24)\nWORKER_SECRET=$(openssl rand -hex 32)\naws ssm put-parameter --name /aiori/worker/shared-secret --type SecureString --overwrite --value \"$WORKER_SECRET\" --region "
+              - !Ref AWS::Region
+              - "\ncat >/etc/aiori/controller.env <<EOF\nVM_CONTROLLER_OPERATOR_TOKEN=$TOKEN\nVM_CONTROLLER_OPERATOR_USERNAME=operator\nVM_CONTROLLER_OPERATOR_PASSWORD=$PASSWORD\nVM_CONTROLLER_WORKER_SHARED_SECRET=$WORKER_SECRET\nVM_CONTROLLER_LISTEN_ADDR=0.0.0.0:8080\nVM_CONTROLLER_DATABASE_PATH=/var/lib/aiori/controller.db\nAWS_REGION="
+              - !Ref AWS::Region
+              - "\nEOF\nchmod 0600 /etc/aiori/controller.env\ncat >/etc/aiori/config.json <<'EOF'\n{\"listen_addr\":\"0.0.0.0:8080\",\"database_path\":\"/var/lib/aiori/controller.db\",\"max_vcpus\":16,\"max_memory_mib\":32768,\"memory_safety_reserve_mib\":1024,\"allowed_images\":[\"ubuntu-demo\"],\"workers\":[],\"secure_cookies\":true,\"shutdown_timeout_seconds\":20}\nEOF\ncat >/etc/systemd/system/aiori-controller.service <<'EOF'\n[Unit]\nDescription=Aiori Compute controller\nAfter=network-online.target\nWants=network-online.target\n[Service]\nType=simple\nUser=root\nEnvironmentFile=/etc/aiori/controller.env\nExecStart=/usr/local/bin/aiori-controller -config /etc/aiori/config.json\nRestart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\nEOF\nsystemctl daemon-reload\nsystemctl enable --now aiori-controller\n"
+  ControllerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref AioriVPC
+      Port: 8080
+      Protocol: HTTP
+      TargetType: instance
+      Targets: [{Id: !Ref Controller, Port: 8080}]
+      HealthCheckPath: /healthz
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Type: application
+      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
+      SecurityGroups: [!Ref ALBSecurityGroup]
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates: [{CertificateArn: !Ref CertificateArn}]
+      DefaultActions: [{Type: forward, TargetGroupArn: !Ref ControllerTargetGroup}]
+  AioriDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: Aiori-Compute
+      DashboardBody: !Sub |
+        {"widgets":[{"type":"metric","width":12,"height":6,"properties":{"title":"Controller CPU","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/EC2","CPUUtilization","InstanceId","${Controller}"]],"period":300,"stat":"Average"}},{"type":"log","width":24,"height":8,"properties":{"title":"Controller logs","region":"${AWS::Region}","query":"SOURCE '/aiori/controller' | fields @timestamp, @message | sort @timestamp desc | limit 100"}}]}
+Outputs:
+  VpcId: {Description: VPC ID, Value: !Ref AioriVPC}
+  ControllerInstanceId: {Description: Controller EC2 instance ID, Value: !Ref Controller}
+  ControllerSecurityGroupId: {Description: Controller security group, Value: !Ref ControllerSecurityGroup}
+  WorkerSecurityGroupId: {Description: Worker security group, Value: !Ref WorkerSecurityGroup}
+  WorkerInstanceProfile: {Description: Worker instance profile, Value: !Ref WorkerInstanceProfile}
+  WorkerSubnetId: {Description: Default worker subnet, Value: !Ref PublicSubnetA}
+  ControllerURL: {Description: HTTPS URL, Value: !Sub 'https://${DomainName}'}
+  LoadBalancerDNSName: {Description: ALB DNS name, Value: !GetAtt ApplicationLoadBalancer.DNSName}
+  CloudWatchDashboardURL: {Description: CloudWatch dashboard URL, Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=Aiori-Compute'}

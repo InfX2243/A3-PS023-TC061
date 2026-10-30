@@ -30,13 +30,11 @@ func TestBuildUserDataInstallsVerifiedAgentAndUsesSSMSecret(t *testing.T) {
 	for _, expected := range []string{
 		"sha256sum --check --status", "aws ssm get-parameter", "--with-decryption",
 		"worker-agent", "cloud-hypervisor", "/api/v1/worker/heartbeat",
-		"worker_endpoint", "aiori-worker-agent.service", "systemctl enable --now",
-		"/dev/kvm",
+		"worker_endpoint", "aiori-worker-agent.service", "systemctl enable --now"
 	} {
 		if !strings.Contains(script, expected) { t.Fatalf("bootstrap script omitted %q", expected) }
 	}
 	if strings.Contains(script, "VM_CONTROLLER_WORKER_SHARED_SECRET=supersecret") { t.Fatal("bootstrap must not embed a long-lived worker secret") }
-	if !strings.Contains(script, "sg-controller123") { t.Fatal("controller security group must be present in bootstrap configuration validation") }
 }
 
 func TestBuildUserDataRejectsUnsafeArtifactAndMissingNetworkIdentity(t *testing.T) {

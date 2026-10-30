@@ -29,9 +29,11 @@ func TestBuildUserDataInstallsVerifiedAgentAndUsesSSMSecret(t *testing.T) {
 		"sha256sum --check --status", "aws ssm get-parameter", "--with-decryption",
 		"x86_64", "apt-get", "worker-agent", "cloud-hypervisor", "ovmf", "firmware_path", "/api/v1/worker/heartbeat",
 		"worker_endpoint", "worker_name", "aiori-worker-agent.service", "systemctl enable --now",
+		"https://controller.example.test/api/v1/worker/metrics", "rstrip(\'%\')",
 	} {
 		if !strings.Contains(script, expected) { t.Fatalf("bootstrap script omitted %q", expected) }
 	}
+	if strings.Contains(script, "%!") { t.Fatal("bootstrap format template contains unresolved formatting directives") }
 	if strings.Contains(script, "VM_CONTROLLER_WORKER_SHARED_SECRET=supersecret") { t.Fatal("bootstrap must not embed a long-lived worker secret") }
 }
 

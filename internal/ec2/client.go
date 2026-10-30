@@ -21,6 +21,7 @@ type API interface {
 	DescribeInstances(context.Context, *ec2.DescribeInstancesInput, ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
 	StartInstances(context.Context, *ec2.StartInstancesInput, ...func(*ec2.Options)) (*ec2.StartInstancesOutput, error)
 	StopInstances(context.Context, *ec2.StopInstancesInput, ...func(*ec2.Options)) (*ec2.StopInstancesOutput, error)
+	AuthorizeSecurityGroupIngress(context.Context, *ec2.AuthorizeSecurityGroupIngressInput, ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupIngressOutput, error)
 }
 
 type Client struct {
@@ -205,6 +206,31 @@ func (c Client) ListManaged(ctx context.Context, region string) ([]Instance, err
 		token = out.NextToken
 	}
 	return result, nil
+}
+
+// AllowControllerIngress opens only the worker-agent port to the controller's
+// security group. It never creates a public CIDR ingress rule.
+func (c Client) AllowControllerIngress(ctx context.Context, region string, workerGroupIDs []string, controllerGroupID string, port int) error {
+	region = c.region(region)
+	if !regionPattern.MatchString(region) || !validID(controllerGroupID, "sg-") || port < 1024 || port > 65535 || len(workerGroupIDs) == 0 {
+		return errors.New("valid region, controller/worker security groups, and worker port are required")
+	}
+	api, err := c.sdk(ctx, region)
+	if err != nil { return err }
+	for _, workerGroupID := range workerGroupIDs {
+		if !validID(workerGroupID, "sg-") { return errors.New("worker security group ID is invalid") }
+		_, err := api.AuthorizeSecurityGroupIngress(ctx, &ec2.AuthorizeSecurityGroupIngressInput{
+			GroupId: aws.String(workerGroupID),
+			IpPermissions: []types.IpPermission{{
+				IpProtocol: aws.String("tcp"), FromPort: aws.Int32(int32(port)), ToPort: aws.Int32(int32(port)),
+				UserIdGroupPairs: []types.UserIdGroupPair{{GroupId: aws.String(controllerGroupID)}},
+			}},
+		})
+		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "invalidpermission.duplicate") && !strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			return fmt.Errorf("authorize controller access to worker security group %s: %w", workerGroupID, err)
+		}
+	}
+	return nil
 }
 
 func (c Client) Action(ctx context.Context, region, id, action string) error {

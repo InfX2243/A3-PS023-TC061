@@ -14,7 +14,7 @@ import (
 // controller endpoint needed to turn a fresh Linux AMI into a worker agent.
 type BootstrapConfig struct {
 	ControllerURL string
-	WorkerSharedSecret string
+	SecretParameter string
 	WorkerAgentURL string
 	WorkerAgentSHA256 string
 	CloudHypervisorURL string
@@ -39,7 +39,8 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 		CloudHypervisorURL: strings.TrimSpace(getenv("VM_CONTROLLER_CLOUD_HYPERVISOR_URL")),
 		CloudHypervisorSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_CLOUD_HYPERVISOR_SHA256")),
 		DiskURL: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_URL")),
-		DiskSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_SHA256")),		ControllerSecurityGroupID: strings.TrimSpace(getenv("VM_CONTROLLER_SECURITY_GROUP_ID")),
+		DiskSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_SHA256")),
+		SecretParameter: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_SECRET_PARAMETER")),		ControllerSecurityGroupID: strings.TrimSpace(getenv("VM_CONTROLLER_SECURITY_GROUP_ID")),
 		ImageID: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_IMAGE_ID")),
 		MemoryLimitMiB: envUint64("VM_CONTROLLER_WORKER_MEMORY_LIMIT_MIB", 4096),
 		AgentPort: int(envUint64("VM_CONTROLLER_WORKER_AGENT_PORT", 9090)),
@@ -51,13 +52,12 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 func (b BootstrapConfig) Enabled() bool {
 	return b.WorkerAgentURL != "" && b.WorkerAgentSHA256 != "" &&
 		b.CloudHypervisorURL != "" && b.CloudHypervisorSHA256 != "" &&
-		b.DiskURL != "" && b.DiskSHA256 != "" && b.WorkerSharedSecret != "" && b.ImageID != ""
+		b.DiskURL != "" && b.DiskSHA256 != "" && b.SecretParameter != "" && b.ImageID != ""
 }
 
 func (b BootstrapConfig) BuildUserData() (string, error) {
-	if !b.Enabled() { return "", errors.New("worker bootstrap is not configured; set verified worker artifacts, controller shared secret, and worker image ID") }
+	if !b.Enabled() { return "", errors.New("worker bootstrap is not configured; set verified worker artifacts, worker secret parameter, and worker image ID") }
 	if strings.TrimSpace(b.ControllerURL) == "" { return "", errors.New("controller URL is required; enter the public ngrok HTTPS URL on the AWS launch form") }
-	if len(b.WorkerSharedSecret) < 32 || strings.ContainsAny(b.WorkerSharedSecret, "\r\n") { return "", errors.New("controller worker shared secret must contain at least 32 characters and no line breaks") }
 	for name, raw := range map[string]string{
 		"controller URL": b.ControllerURL,
 		"worker agent URL": b.WorkerAgentURL,
@@ -97,7 +97,7 @@ export DEBIAN_FRONTEND=noninteractive
 if [ "$(uname -m)" != "x86_64" ]; then echo "AIORI worker artifacts require an x86_64 AMI"; exit 1; fi
 if [ ! -x /usr/bin/apt-get ]; then echo "AIORI worker bootstrap requires an Ubuntu/Debian AMI"; exit 1; fi
 apt-get update
-apt-get install -y ca-certificates curl ovmf
+apt-get install -y awscli ca-certificates curl ovmf
 apt-get install -y python3
 install -d -m 0755 /opt/aiori /etc/aiori /var/lib/aiori-worker/runtime /var/lib/aiori-worker/images
 download_verified() {
@@ -115,7 +115,7 @@ INSTANCE_ID=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $T
 LOCAL_IPV4=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$IMDS/local-ipv4")
 REGION=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$IMDS/placement/region")
 CPU_COUNT=$(nproc)
-WORKER_SECRET=%s
+WORKER_SECRET=$(aws ssm get-parameter --region "$REGION" --name %s --with-decryption --query Parameter.Value --output text)
 test -n "$WORKER_SECRET"
 umask 077
 printf 'VM_CONTROLLER_WORKER_SHARED_SECRET=%%s\n' "$WORKER_SECRET" > /etc/aiori/worker.env
@@ -216,7 +216,7 @@ systemctl enable --now aiori-metrics-collector
 		shellQuote(b.WorkerAgentURL), shellQuote(strings.ToLower(b.WorkerAgentSHA256)),
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),
 		shellQuote(b.DiskURL), shellQuote(strings.ToLower(b.DiskSHA256)),
-		shellQuote(b.WorkerSharedSecret), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID, b.ControllerURL), nil
+		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID, b.ControllerURL), nil
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

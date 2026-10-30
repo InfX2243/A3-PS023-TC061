@@ -229,10 +229,47 @@ func TestVirtualMachineNavigationUsesDedicatedAuthenticatedPage(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK { t.Fatalf("VM inventory status = %d; body=%s", response.Code, response.Body.String()) }
 	body := response.Body.String()
-	for _, expected := range []string{"Virtual machines", "VM inventory", "Production API", "vm-prod-01", "worker-a", "2 vCPU", "2048 MiB memory", "href=\"/vms/new\"", "action=\"/vms/vm-prod-01/stop\""} {
+	for _, expected := range []string{"Virtual machines", "VM inventory", "Production API", "vm-prod-01", "worker-a", "vCPU", "2048 MiB RAM", "href=\"/vms/new\"", "action=\"/vms/vm-prod-01/stop\""} {
 		if !strings.Contains(body, expected) { t.Errorf("VM inventory omitted %q", expected) }
 	}
 	if strings.Contains(body, "href=\"/console#vms\"") { t.Fatal("virtual machine navigation still points to a dashboard section") }
+	for _, expected := range []string{"vm-inventory-body", "vm-shell", "vm-main", "vm-topbar", "vm-content", "vm-metrics", "data-vm-search", "data-vm-state-filter", "data-vm-row", "vm-bottom-grid", "aria-label=\"Virtual machine inventory table\""} {
+		if !strings.Contains(body, expected) { t.Errorf("VM inventory omitted workspace feature %q", expected) }
+	}
+}
+
+ 
+func TestVMInventoryUsesFixedNavigationAndSingleScrollableWorkspace(t *testing.T) {
+	h, handler := newTestUI()
+	fake := h.service.(*fakeUIService)
+	fake.vms = []domain.VM{
+		{ID: "vm-running", Name: "API Production", WorkerID: "worker-a", VCPUs: 4, MemoryBytes: 4096 * 1024 * 1024, ImageID: "ubuntu-24", Observed: domain.VMRunning},
+		{ID: "vm-stopped", Name: "Staging Database", WorkerID: "worker-b", VCPUs: 2, MemoryBytes: 2048 * 1024 * 1024, ImageID: "debian-12", Observed: domain.VMStopped},
+	}
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/vms", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("VM inventory status=%d body=%s", response.Code, response.Body.String()) }
+	body := response.Body.String()
+	for _, expected := range []string{"API Production", "Staging Database", "vm-running", "vm-stopped", "data-vm-state=\"running\"", "data-vm-state=\"stopped\"", "data-vm-search", "data-vm-state-filter", "action=\"/vms/vm-running/stop\"", "action=\"/vms/vm-stopped/start\""} {
+		if !strings.Contains(body, expected) { t.Errorf("VM inventory omitted %q", expected) }
+	}
+	if strings.Contains(body, "max-height:560px") || strings.Contains(body, "vm-table-scroll{max-height:") {
+		t.Fatal("VM inventory must not introduce a nested vertical scrolling region")
+	}
+	css := httptest.NewRecorder()
+	handler.ServeHTTP(css, httptest.NewRequest(http.MethodGet, "/assets/ui.css", nil))
+	for _, expected := range []string{"body.vm-inventory-body{height:100vh", ".vm-shell>.sidebar{position:fixed", ".vm-main{display:flex", ".vm-content{width:100%;max-width:none;flex:1 1 auto;min-height:0;overflow-y:auto", ".vm-table-scroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:visible"} {
+		if !strings.Contains(css.Body.String(), expected) { t.Errorf("VM inventory layout CSS omitted %q", expected) }
+	}
+	js := httptest.NewRecorder()
+	handler.ServeHTTP(js, httptest.NewRequest(http.MethodGet, "/assets/ui.js", nil))
+	if !strings.Contains(js.Body.String(), "initVMInventoryInteractions") { t.Fatal("VM inventory filtering enhancement was not served") }
 }
 
 func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testing.T) {

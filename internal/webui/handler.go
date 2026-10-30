@@ -245,12 +245,16 @@ func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
  instance,err:=h.ec2Client.Launch(r.Context(),in); if err!=nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape(err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }
  notice := "EC2 launch accepted without worker-agent bootstrap; this instance is not an enrolled worker."
  if h.ec2Bootstrap.Enabled() {
-   ingress, ok := h.ec2Client.(ec2IngressProvisioner)
-   if !ok { http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched, but the provider cannot configure private worker-agent ingress."),http.StatusSeeOther); return }
-   if err := ingress.AllowControllerIngress(r.Context(), in.Region, instance.SecurityGroups, h.ec2Bootstrap.ControllerSecurityGroupID, h.ec2Bootstrap.AgentPort); err != nil {
-     http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched with user data, but controller-to-worker network access could not be configured: "+err.Error()),http.StatusSeeOther); return
+   if h.ec2Bootstrap.ControllerSecurityGroupID == "" {
+     notice = "EC2 launch accepted with checksum-verified bootstrap and outbound platform telemetry. No controller security-group rule was added; ngrok supports worker-to-controller metrics uploads, but controller-to-worker VM RPC requires a private VPC path."
+   } else {
+     ingress, ok := h.ec2Client.(ec2IngressProvisioner)
+     if !ok { http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched, but the provider cannot configure private worker-agent ingress."),http.StatusSeeOther); return }
+     if err := ingress.AllowControllerIngress(r.Context(), in.Region, instance.SecurityGroups, h.ec2Bootstrap.ControllerSecurityGroupID, h.ec2Bootstrap.AgentPort); err != nil {
+       http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched with user data, but controller-to-worker network access could not be configured: "+err.Error()),http.StatusSeeOther); return
+     }
+     notice = "EC2 launch accepted with checksum-verified worker bootstrap and private controller-only agent ingress. Wait for cloud-init and the first authenticated heartbeat; agent health is shown separately in Worker inventory."
    }
-   notice = "EC2 launch accepted with checksum-verified worker bootstrap and private controller-only agent ingress. Wait for cloud-init and the first authenticated heartbeat; agent health is shown separately in Worker inventory."
  }
  http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape(notice)+"&name="+url.QueryEscape(in.Name),http.StatusSeeOther)
 }

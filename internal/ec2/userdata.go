@@ -98,9 +98,7 @@ if [ "$(uname -m)" != "x86_64" ]; then echo "AIORI worker artifacts require an x
 if [ ! -x /usr/bin/apt-get ]; then echo "AIORI worker bootstrap requires an Ubuntu/Debian AMI"; exit 1; fi
 apt-get update
 apt-get install -y awscli ca-certificates curl ovmf
-# Install the AWS-published CloudWatch Agent package for Ubuntu amd64.
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -o /tmp/amazon-cloudwatch-agent.deb
-dpkg -i /tmp/amazon-cloudwatch-agent.deb
+apt-get install -y python3
 install -d -m 0755 /opt/aiori /etc/aiori /var/lib/aiori-worker/runtime /var/lib/aiori-worker/images
 download_verified() {
   local url="$1" destination="$2" checksum="$3" mode="$4"
@@ -165,26 +163,55 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 systemctl enable --now aiori-worker-agent
-cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWCONFIG'
-{
-  "agent": {"metrics_collection_interval": 60, "run_as_user": "root"},
-  "metrics": {
-    "namespace": "Aiori/Worker",
-    "append_dimensions": {"InstanceId": "${aws:InstanceId}", "InstanceType": "${aws:InstanceType}"},
-    "metrics_collected": {
-      "cpu": {"measurement": ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"], "totalcpu": true},
-      "mem": {"measurement": ["mem_used_percent"]},
-      "disk": {"measurement": ["used_percent", "inodes_free"], "resources": ["/"]},
-      "net": {"measurement": ["bytes_sent", "bytes_recv"], "resources": ["eth0"]}
-    }
-  },
-  "logs": {"logs_collected": {"files": {"collect_list": [
-    {"file_path": "/var/log/aiori-worker-bootstrap.log", "log_group_name": "/aiori/workers", "log_stream_name": "{instance_id}/bootstrap"},
-    {"file_path": "/var/log/syslog", "log_group_name": "/aiori/workers", "log_stream_name": "{instance_id}/system"}
-  ]}}}
-}
-CWCONFIG
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+cat >/usr/local/bin/aiori-metrics-collector.py <<'PYMETRICS'
+#!/usr/bin/env python3
+import datetime, json, os, subprocess, time, urllib.request
+def cpu():
+    v=list(map(int,open('/proc/stat').readline().split()[1:])); return sum(v),v[3]+(v[4] if len(v)>4 else 0)
+def net():
+    rx=tx=0
+    for line in open('/proc/net/dev').readlines()[2:]:
+        name,data=line.split(':',1)
+        if name.strip()=='lo': continue
+        v=list(map(int,data.split())); rx+=v[0]; tx+=v[8]
+    return rx,tx
+previous=cpu()
+while True:
+    time.sleep(60)
+    current=cpu(); total=current[0]-previous[0]; idle=current[1]-previous[1]; previous=current
+    cpu_pct=max(0,min(100,(total-idle)*100/total)) if total else 0
+    mem={}
+    for line in open('/proc/meminfo'):
+        k,v=line.split(':',1); mem[k]=int(v.strip().split()[0])
+    memory_pct=max(0,min(100,(mem.get('MemTotal',1)-mem.get('MemAvailable',mem.get('MemFree',0)))*100/mem.get('MemTotal',1)))
+    disk_pct=float(subprocess.check_output(['df','-P','/']).decode().splitlines()[1].split()[4].rstrip('%'))
+    rx,tx=net()
+    secret=open('/etc/aiori/worker.env').read().split('=',1)[1].strip()
+    body={'instance_id':open('/var/lib/aiori-worker/instance-id').read().strip(),'timestamp':datetime.datetime.now(datetime.timezone.utc).isoformat(),'cpu_percent':cpu_pct,'memory_percent':memory_pct,'disk_percent':disk_pct,'network_rx_bytes':rx,'network_tx_bytes':tx}
+    req=urllib.request.Request(os.environ['AIORI_METRICS_URL'],data=json.dumps(body).encode(),headers={'Authorization':'Bearer '+secret,'Content-Type':'application/json'},method='POST')
+    try: urllib.request.urlopen(req,timeout=10).read()
+    except Exception as exc: print('metrics upload failed:',exc,flush=True)
+PYMETRICS
+printf '%s' "$INSTANCE_ID" > /var/lib/aiori-worker/instance-id
+cat >/etc/systemd/system/aiori-metrics-collector.service <<'EOF'
+[Unit]
+Description=AIORI in-platform host metrics collector
+After=network-online.target aiori-worker-agent.service
+Wants=network-online.target
+[Service]
+Type=simple
+User=root
+Environment=AIORI_METRICS_URL=%s/api/v1/worker/metrics
+ExecStart=/usr/bin/python3 /usr/local/bin/aiori-metrics-collector.py
+Restart=always
+RestartSec=10
+[Install]
+WantedBy=multi-user.target
+EOF
+chmod 0755 /usr/local/bin/aiori-metrics-collector.py
+systemctl daemon-reload
+systemctl enable --now aiori-metrics-collector
+
 `,
 		shellQuote(b.WorkerAgentURL), shellQuote(strings.ToLower(b.WorkerAgentSHA256)),
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),

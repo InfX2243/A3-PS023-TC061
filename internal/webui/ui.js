@@ -196,8 +196,115 @@
     }
   }
 
+
+  function initDocsInteractions() {
+    var page = document.querySelector(".docs-page");
+    if (!page) return;
+    var sections = Array.prototype.slice.call(page.querySelectorAll(".docs-article .docs-section[id]"));
+    var search = page.querySelector("#docs-search");
+    var searchStatus = page.querySelector("#docs-search-status");
+    var progress = page.querySelector(".docs-reading-progress span");
+    var backTop = page.querySelector(".docs-back-top");
+    var navGroups = Array.prototype.slice.call(page.querySelectorAll(".docs-sidebar > .docs-nav-label"));
+    var navs = Array.prototype.slice.call(page.querySelectorAll(".docs-sidebar > .docs-nav"));
+    var ticking = false;
+
+    // Add accessible, no-dependency copy controls to each shell command/example.
+    page.querySelectorAll(".docs-code").forEach(function (block) {
+      var pre = block.querySelector("pre");
+      if (!pre || block.querySelector(".docs-code-copy")) return;
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "docs-code-copy";
+      button.textContent = "Copy";
+      button.setAttribute("aria-label", "Copy code example");
+      button.addEventListener("click", function () {
+        var value = pre.innerText || pre.textContent || "";
+        function copied() {
+          button.textContent = "Copied";
+          button.setAttribute("aria-label", "Code example copied");
+          window.setTimeout(function () {
+            button.textContent = "Copy";
+            button.setAttribute("aria-label", "Copy code example");
+          }, 1600);
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(value).then(copied).catch(function () {
+            button.textContent = "Select to copy";
+          });
+        } else {
+          var range = document.createRange();
+          range.selectNodeContents(pre);
+          var selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          button.textContent = "Select to copy";
+          button.setAttribute("aria-label", "Code selected; use your copy shortcut");
+        }
+      });
+      block.appendChild(button);
+    });
+
+    // Give every section a stable deep link while preserving its existing heading.
+    sections.forEach(function (section) {
+      var heading = section.querySelector("h2");
+      if (!heading || heading.querySelector(".docs-section-heading-link")) return;
+      var anchor = document.createElement("a");
+      anchor.className = "docs-section-heading-link";
+      anchor.href = "#" + section.id;
+      anchor.textContent = "#";
+      anchor.setAttribute("aria-label", "Link to " + heading.textContent.trim());
+      heading.appendChild(anchor);
+    });
+
+    function applySearch() {
+      var query = (search ? search.value : "").trim().toLowerCase();
+      var shown = 0;
+      sections.forEach(function (section) {
+        var match = !query || section.textContent.toLowerCase().indexOf(query) !== -1;
+        section.hidden = !match;
+        if (match) shown++;
+        var links = page.querySelectorAll('.docs-sidebar a[href="#' + section.id + '"]');
+        links.forEach(function (link) { link.hidden = !match; });
+      });
+      navGroups.forEach(function (label, index) {
+        var nav = navs[index];
+        if (!nav) return;
+        label.hidden = !Array.prototype.some.call(nav.querySelectorAll("a"), function (link) { return !link.hidden; });
+      });
+      if (searchStatus) {
+        searchStatus.textContent = query ? (shown ? shown + " matching sections" : "No matching sections") : sections.length + " topics · 1 guide";
+      }
+    }
+    if (search) {
+      search.addEventListener("input", applySearch);
+      search.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && search.value) {
+          search.value = "";
+          applySearch();
+        }
+      });
+    }
+
+    function updateScrollUI() {
+      var root = document.documentElement;
+      var max = root.scrollHeight - window.innerHeight;
+      var amount = max > 0 ? Math.max(0, Math.min(1, window.scrollY / max)) : 0;
+      if (progress) progress.style.width = (amount * 100) + "%";
+      if (backTop) backTop.classList.toggle("is-visible", window.scrollY > 520);
+      ticking = false;
+    }
+    window.addEventListener("scroll", function () {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(updateScrollUI);
+    }, { passive: true });
+    updateScrollUI();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initDocsNavigation();
+    initDocsInteractions();
     initFormFeedback();
     initWorkspaceNavigation();
     initLandingNavigation();

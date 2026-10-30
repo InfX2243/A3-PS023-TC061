@@ -269,7 +269,11 @@ func (h *Handler) launchEC2(w http.ResponseWriter, r *http.Request) {
 		InstanceProfile: strings.TrimSpace(r.FormValue("instance_profile")),
 		ClientToken: r.FormValue("client_token"),
 	}
-		bootstrap := h.ec2Bootstrap
+	if in.InstanceProfile == "" {
+		fail("Provide a worker IAM instance profile with ssm:GetParameter access to the configured worker secret.")
+		return
+	}
+	bootstrap := h.ec2Bootstrap
 	bootstrap.NodeName = in.Name
 	bootstrap.ControllerURL = strings.TrimRight(strings.TrimSpace(r.FormValue("controller_url")), "/")
 	userData, err := bootstrap.BuildUserData()

@@ -184,6 +184,10 @@ Resources:
               - !Ref ControllerArtifactSha256
               - "  /tmp/aiori-controller' | sha256sum --check -\ninstall -m 0755 /tmp/aiori-controller /usr/local/bin/aiori-controller\nTOKEN=$(openssl rand -hex 32)\nPASSWORD=$(openssl rand -hex 24)\nWORKER_SECRET=$(openssl rand -hex 32)\naws ssm put-parameter --name /aiori/worker/shared-secret --type SecureString --overwrite --value \"$WORKER_SECRET\" --region "
               - !Ref AWS::Region
+              - "\naws ssm put-parameter --name /aiori/operator/password --type SecureString --overwrite --value \"$PASSWORD\" --region "
+              - !Ref AWS::Region
+              - "\naws ssm put-parameter --name /aiori/operator/token --type SecureString --overwrite --value \"$TOKEN\" --region "
+              - !Ref AWS::Region
               - "\ncat >/etc/aiori/controller.env <<EOF\nVM_CONTROLLER_OPERATOR_TOKEN=$TOKEN\nVM_CONTROLLER_OPERATOR_USERNAME=operator\nVM_CONTROLLER_OPERATOR_PASSWORD=$PASSWORD\nVM_CONTROLLER_WORKER_SHARED_SECRET=$WORKER_SECRET\nVM_CONTROLLER_LISTEN_ADDR=0.0.0.0:8080\nVM_CONTROLLER_DATABASE_PATH=/var/lib/aiori/controller.db\nAWS_REGION="
               - !Ref AWS::Region
               - "\nVM_CONTROLLER_PUBLIC_URL=https://"

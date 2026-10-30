@@ -754,15 +754,16 @@ func authenticatedEC2LaunchRequest(t *testing.T, h *Handler, handler http.Handle
 	return response
 }
 
-func TestEC2LaunchRefusesToCreateInstanceWithoutBootstrap(t *testing.T) {
+func TestEC2LaunchCanProvisionInstanceWithoutWorkerBootstrap(t *testing.T) {
 	h:=NewHandler(&fakeUIService{},"operator-secret",Limits{},false)
 	provider:=&fakeEC2Provisioner{}
 	h.SetEC2Provisioner(provider)
 	mux:=http.NewServeMux(); h.Register(mux)
 	response:=authenticatedEC2LaunchRequest(t,h,mux)
 	if response.Code!=http.StatusSeeOther { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
-	if provider.launchCalls!=0 { t.Fatalf("AWS launch called %d times without user data",provider.launchCalls) }
-	if !strings.Contains(response.Header().Get("Location"),"bootstrap") { t.Fatalf("redirect did not explain missing bootstrap: %s",response.Header().Get("Location")) }
+	if provider.launchCalls!=1 { t.Fatalf("AWS launch called %d times without bootstrap, want 1",provider.launchCalls) }
+	if provider.lastLaunch.UserData!="" { t.Fatal("unconfigured bootstrap must not send partial user data") }
+	if !strings.Contains(response.Header().Get("Location"),"will+NOT+enroll") { t.Fatalf("redirect did not disclose that this is EC2-only: %s",response.Header().Get("Location")) }
 }
 
 func TestEC2LaunchAlwaysPassesGeneratedUserDataToAWS(t *testing.T) {
@@ -779,7 +780,7 @@ func TestEC2LaunchAlwaysPassesGeneratedUserDataToAWS(t *testing.T) {
 	if !strings.Contains(response.Header().Get("Location"),"/aws/instances/i-bootstrap123") { t.Fatalf("launch did not redirect to instance detail page: %s",response.Header().Get("Location")) }
 }
 
-func TestAWSPageDisablesLaunchWhenBootstrapIsMissing(t *testing.T) {
+func TestAWSPageAllowsEC2LaunchAndExplainsMissingWorkerBootstrap(t *testing.T) {
 	h:=NewHandler(&fakeUIService{},"operator-secret",Limits{},false)
 	provider:=&fakeEC2Provisioner{}
 	h.SetEC2Provisioner(provider)
@@ -790,5 +791,5 @@ func TestAWSPageDisablesLaunchWhenBootstrapIsMissing(t *testing.T) {
 	request:=httptest.NewRequest(http.MethodGet,"/aws",nil); request.AddCookie(loginResponse.Result().Cookies()[0])
 	response:=httptest.NewRecorder(); mux.ServeHTTP(response,request)
 	if response.Code!=http.StatusOK { t.Fatalf("status=%d",response.Code) }
-	if !strings.Contains(response.Body.String(),"Bootstrap configuration required") { t.Fatal("AWS page did not disable worker launch without bootstrap") }
+	if !strings.Contains(response.Body.String(),"Launch EC2 instance (no worker agent)") { t.Fatal("AWS page did not offer EC2-only provisioning") }; if strings.Contains(response.Body.String(),`type="submit" disabled`) { t.Fatal("EC2 launch button must not be disabled when bootstrap is absent") }
 }

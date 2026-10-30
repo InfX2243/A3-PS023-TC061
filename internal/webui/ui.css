@@ -419,6 +419,7 @@ button, input, select, textarea { font: inherit; }
 body.dashboard-body{height:100vh;min-height:100vh;overflow:hidden;overscroll-behavior:none}
 .dashboard-shell{display:grid;grid-template-columns:252px minmax(0,1fr);height:100vh;min-height:0;overflow:hidden}
 .dashboard-shell>.sidebar{position:fixed;inset:0 auto 0 0;width:252px;height:100vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#34415b transparent}
+.dashboard-shell>.dashboard-main{margin-left:252px}
 .dashboard-main{display:flex;height:100vh;min-height:0;min-width:0;flex-direction:column;margin-left:252px;overflow:hidden}
 .dashboard-topbar{position:relative;z-index:4;flex:0 0 66px;min-height:66px}
 .dashboard-content{width:100%;max-width:none;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-bottom:52px;scrollbar-width:thin;scrollbar-color:#c8ccda transparent}
@@ -493,6 +494,7 @@ body.dashboard-body{height:100vh;min-height:100vh;overflow:hidden;overscroll-beh
  body.dashboard-body{height:auto;min-height:100vh;overflow:auto;overscroll-behavior:auto}
  .dashboard-shell{display:flex;height:auto;min-height:100vh;overflow:visible;flex-direction:column}
  .dashboard-shell>.sidebar{position:sticky;top:0;inset:auto;width:100%;height:auto;min-height:0;overflow:visible;padding:13px 17px 12px}
+ .dashboard-shell>.dashboard-main{margin-left:0}
  .dashboard-main{height:auto;min-height:0;margin-left:0;overflow:visible}
  .dashboard-topbar{position:relative;flex:0 0 auto}
  .dashboard-content{flex:initial;min-height:0;overflow:visible;scrollbar-gutter:auto}

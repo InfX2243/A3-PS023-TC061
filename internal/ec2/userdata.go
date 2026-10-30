@@ -28,7 +28,6 @@ type BootstrapConfig struct {
 	MemoryLimitMiB uint64
 	AgentPort int
 	CloudWatchLogGroup string
-	CloudWatchStackName string
 }
 
 var sha256Pattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
@@ -49,7 +48,6 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 		MemoryLimitMiB: envUint64("VM_CONTROLLER_WORKER_MEMORY_LIMIT_MIB", 4096),
 		AgentPort: int(envUint64("VM_CONTROLLER_WORKER_AGENT_PORT", 9090)),
 		CloudWatchLogGroup: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_LOG_GROUP")),
-		CloudWatchStackName: strings.TrimSpace(getenv("VM_CONTROLLER_STACK_NAME")),
 	}
 }
 
@@ -101,110 +99,6 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 	if b.AgentPort < 1024 || b.AgentPort > 65535 { return "", errors.New("worker agent port must be between 1024 and 65535") }
 	if b.CloudWatchLogGroup == "" { b.CloudWatchLogGroup = "/aiori/worker" }
 	if !strings.HasPrefix(b.CloudWatchLogGroup, "/aiori/") || strings.ContainsAny(b.CloudWatchLogGroup, "\r\n\\\"") { return "", errors.New("worker CloudWatch log group must be a safe /aiori/ path") }
-	if b.CloudWatchStackName == "" { b.CloudWatchStackName = "unscoped" }
-	if len(b.CloudWatchStackName) > 128 || !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,127}package ec2
-
-import (
-	"errors"
-	"fmt"
-	"net"
-	"net/url"
-	"os"
-	"regexp"
-	"strconv"
-	"strings"
-)
-
-// BootstrapConfig describes immutable, checksum-verified artifacts and the
-// controller endpoint needed to turn a fresh Linux AMI into a worker agent.
-type BootstrapConfig struct {
-	ControllerURL string
-	WorkerAgentURL string
-	WorkerAgentSHA256 string
-	CloudHypervisorURL string
-	CloudHypervisorSHA256 string
-	DiskURL string
-	DiskSHA256 string
-	SecretParameter string
-	ControllerSecurityGroupID string
-	ImageID string
-	NodeName string
-	MemoryLimitMiB uint64
-	AgentPort int
-	CloudWatchLogGroup string
-	CloudWatchStackName string
-}
-
-var sha256Pattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
-var imageNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
-
-func BootstrapConfigFromEnv() BootstrapConfig {
-	return BootstrapConfig{
-		ControllerURL: strings.TrimRight(strings.TrimSpace(getenv("VM_CONTROLLER_PUBLIC_URL")), "/"),
-		WorkerAgentURL: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_AGENT_URL")),
-		WorkerAgentSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_AGENT_SHA256")),
-		CloudHypervisorURL: strings.TrimSpace(getenv("VM_CONTROLLER_CLOUD_HYPERVISOR_URL")),
-		CloudHypervisorSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_CLOUD_HYPERVISOR_SHA256")),
-		DiskURL: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_URL")),
-		DiskSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_SHA256")),
-		SecretParameter: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_SECRET_PARAMETER")),
-		ControllerSecurityGroupID: strings.TrimSpace(getenv("VM_CONTROLLER_SECURITY_GROUP_ID")),
-		ImageID: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_IMAGE_ID")),
-		MemoryLimitMiB: envUint64("VM_CONTROLLER_WORKER_MEMORY_LIMIT_MIB", 4096),
-		AgentPort: int(envUint64("VM_CONTROLLER_WORKER_AGENT_PORT", 9090)),
-		CloudWatchLogGroup: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_LOG_GROUP")),
-		CloudWatchStackName: strings.TrimSpace(getenv("VM_CONTROLLER_STACK_NAME")),
-	}
-}
-
-// Enabled reports whether enough configuration exists to generate a complete
-// worker bootstrap. A partial configuration is intentionally not used.
-func (b BootstrapConfig) Enabled() bool {
-	return b.ControllerURL != "" && b.WorkerAgentURL != "" && b.WorkerAgentSHA256 != "" &&
-		b.CloudHypervisorURL != "" && b.CloudHypervisorSHA256 != "" &&
-		b.DiskURL != "" && b.DiskSHA256 != "" && b.SecretParameter != "" && b.ControllerSecurityGroupID != "" && b.ImageID != ""
-}
-
-func (b BootstrapConfig) BuildUserData() (string, error) {
-	if !b.Enabled() { return "", errors.New("worker bootstrap is not configured; set controller URL, artifact URLs and SHA-256 checksums, worker secret parameter, and image ID") }
-	for name, raw := range map[string]string{
-		"controller URL": b.ControllerURL,
-		"worker agent URL": b.WorkerAgentURL,
-		"Cloud Hypervisor URL": b.CloudHypervisorURL,
-		"disk URL": b.DiskURL,
-	} {
-		u, err := url.Parse(raw)
-		validScheme := err == nil && u.Scheme == "https"
-		if name == "controller URL" && err == nil && u.Scheme == "http" {
-			ip := net.ParseIP(u.Hostname())
-			validScheme = ip != nil && ip.IsPrivate()
-		}
-		if err != nil || !validScheme || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (name == "controller URL" && u.Path != "" && u.Path != "/") {
-			return "", fmt.Errorf("%s must be HTTPS, or HTTP to a private VPC IP, without credentials, query, or fragment", name)
-		}
-	}
-	for name, sum := range map[string]string{
-		"worker agent": b.WorkerAgentSHA256, "Cloud Hypervisor": b.CloudHypervisorSHA256,
-		"disk": b.DiskSHA256,
-	} {
-		if !sha256Pattern.MatchString(sum) { return "", fmt.Errorf("%s SHA-256 must be 64 hexadecimal characters", name) }
-	}
-	if !validID(b.ControllerSecurityGroupID, "sg-") { return "", errors.New("VM_CONTROLLER_SECURITY_GROUP_ID must be a valid security group ID in the worker VPC") }
-	if b.NodeName == "" { b.NodeName = "aiori-worker" }
-	if len(b.NodeName) > 128 { return "", errors.New("worker node name must be at most 128 characters") }
-	for _, r := range b.NodeName {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' || r == ' ') {
-			return "", errors.New("worker node name contains unsupported characters")
-		}
-	}
-	if !imageNamePattern.MatchString(b.ImageID) { return "", errors.New("worker image ID must be a safe identifier") }
-	if !strings.HasPrefix(b.SecretParameter, "/") || len(b.SecretParameter) > 1011 || strings.ContainsAny(b.SecretParameter, "\r\n") {
-		return "", errors.New("worker secret parameter must be an absolute SSM parameter path")
-	}
-	if b.MemoryLimitMiB < 512 || b.MemoryLimitMiB > 1<<20 { return "", errors.New("worker memory limit must be between 512 and 1048576 MiB") }
-	if b.AgentPort < 1024 || b.AgentPort > 65535 { return "", errors.New("worker agent port must be between 1024 and 65535") }
-	if b.CloudWatchLogGroup == "" { b.CloudWatchLogGroup = "/aiori/worker" }
-).MatchString(b.CloudWatchStackName) { return "", errors.New("worker CloudWatch stack name is invalid") }
 	memoryBytes := b.MemoryLimitMiB * 1024 * 1024
 	return fmt.Sprintf(`#!/bin/bash
 set -Eeuo pipefail
@@ -273,10 +167,10 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/var/lib/aiori-worker /run
 PrivateTmp=true
-StandardOutput=append:/var/log/aiori-worker-agent.log
-StandardError=append:/var/log/aiori-worker-agent.log
 [Install]
 WantedBy=multi-user.target
+StandardOutput=append:/var/log/aiori-worker-agent.log
+StandardError=append:/var/log/aiori-worker-agent.log
 EOF
 systemctl daemon-reload
 systemctl enable --now aiori-worker-agent
@@ -285,7 +179,7 @@ dpkg -i /tmp/amazoncloudwatch-agent.deb
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWEOF
 {
   "agent": {"metrics_collection_interval": 60, "run_as_user": "root"},
-  "metrics": {"namespace": "CWAgent", "append_dimensions": {"InstanceId": "$INSTANCE_ID", "StackName": "%s"}, "aggregation_dimensions": [["InstanceId"]], "metrics_collected": {
+  "metrics": {"namespace": "CWAgent", "append_dimensions": {"InstanceId": "$INSTANCE_ID"}, "aggregation_dimensions": [["InstanceId"]], "metrics_collected": {
     "mem": {"measurement": ["mem_used_percent", "mem_available"], "metrics_collection_interval": 60},
     "disk": {"measurement": ["used_percent", "inodes_free"], "resources": ["/"], "metrics_collection_interval": 60},
     "diskio": {"measurement": ["reads", "writes", "read_bytes", "write_bytes", "io_time"], "resources": ["*"], "metrics_collection_interval": 60},
@@ -304,7 +198,7 @@ CWEOF
 		shellQuote(b.WorkerAgentURL), shellQuote(strings.ToLower(b.WorkerAgentSHA256)),
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),
 		shellQuote(b.DiskURL), shellQuote(strings.ToLower(b.DiskSHA256)),
-		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID, b.CloudWatchLogGroup, b.CloudWatchLogGroup, b.CloudWatchLogGroup, b.CloudWatchStackName), nil
+		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID, b.CloudWatchLogGroup, b.CloudWatchLogGroup, b.CloudWatchLogGroup), nil
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

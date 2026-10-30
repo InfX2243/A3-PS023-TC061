@@ -106,6 +106,75 @@
     applyFilters();
   }
 
+  function initPrepareVMInteractions() {
+    var form = document.querySelector("[data-vm-config-form]");
+    if (!form) return;
+    var name = form.querySelector("#name");
+    var cpu = form.querySelector("#vcpus");
+    var memory = form.querySelector("#memory_mib");
+    var image = form.querySelector("#image_id");
+    var previewName = document.querySelector("[data-vm-preview-name]");
+    var previewCPU = document.querySelector("[data-vm-preview-vcpus]");
+    var previewMemory = document.querySelector("[data-vm-preview-memory]");
+    var previewImage = document.querySelector("[data-vm-preview-image]");
+    var previewPercent = document.querySelector("[data-vm-preview-memory-percent]");
+    var meter = document.querySelector("[data-vm-preview-meter]");
+    var presets = Array.prototype.slice.call(document.querySelectorAll("[data-vm-preset]"));
+    var maxMemory = memory ? Number(memory.max) : 0;
+
+    function updatePreview() {
+      var cpuValue = Math.max(0, Number(cpu && cpu.value) || 0);
+      var memoryValue = Math.max(0, Number(memory && memory.value) || 0);
+      if (previewName) previewName.textContent = (name && name.value.trim()) || "Untitled workload";
+      if (previewCPU) previewCPU.textContent = String(cpuValue);
+      if (previewMemory) previewMemory.textContent = (memoryValue / 1024).toLocaleString(undefined, {maximumFractionDigits: 2});
+      if (previewImage) previewImage.textContent = image && image.value ? image.options[image.selectedIndex].text : "Not selected";
+      var percent = maxMemory > 0 && memoryValue > 0 ? Math.min(100, memoryValue / maxMemory * 100) : 0;
+      if (previewPercent) previewPercent.textContent = memoryValue > 0 ? Math.round(percent) + "%" : "—";
+      if (meter) meter.style.width = percent + "%";
+      presets.forEach(function (button) {
+        var key = button.getAttribute("data-vm-preset");
+        var match = key === "small" ? cpuValue === 1 && memoryValue === 1024 :
+          key === "standard" ? cpuValue === 2 && memoryValue === 2048 :
+          key === "compute" ? cpuValue === 4 && memoryValue === 4096 : false;
+        button.classList.toggle("is-selected", match);
+        button.setAttribute("aria-pressed", String(match));
+      });
+    }
+    presets.forEach(function (button) {
+      button.addEventListener("click", function () {
+        var key = button.getAttribute("data-vm-preset");
+        var values = key === "small" ? [1, 1024] : key === "standard" ? [2, 2048] : [4, 4096];
+        if (cpu) cpu.value = String(Math.min(Number(cpu.max) || values[0], values[0]));
+        if (memory) memory.value = String(Math.min(Number(memory.max) || values[1], values[1]));
+        updatePreview();
+      });
+    });
+    [name, cpu, memory, image].forEach(function (field) {
+      if (!field) return;
+      field.addEventListener("input", updatePreview);
+      field.addEventListener("change", updatePreview);
+    });
+    form.addEventListener("submit", function (event) {
+      [name, cpu, memory, image].forEach(function (field) {
+        if (!field) return;
+        var valid = field.checkValidity();
+        field.setAttribute("aria-invalid", String(!valid));
+      });
+      if (!form.checkValidity()) {
+        event.preventDefault();
+        var invalid = form.querySelector(":invalid");
+        if (invalid) invalid.focus();
+      }
+    });
+    [name, cpu, memory, image].forEach(function (field) {
+      if (!field) return;
+      field.addEventListener("input", function () { field.removeAttribute("aria-invalid"); });
+      field.addEventListener("change", function () { field.removeAttribute("aria-invalid"); });
+    });
+    updatePreview();
+  }
+
   function initDashboardInteractions() {
     document.querySelectorAll("[data-alert-dismiss]").forEach(function (button) {
       button.addEventListener("click", function () {
@@ -386,6 +455,7 @@
     initLandingMotion();
     initLoginInteractions();
     initDashboardInteractions();
+    initPrepareVMInteractions();
     initWorkerInventoryInteractions();
     initVMInventoryInteractions();
   });

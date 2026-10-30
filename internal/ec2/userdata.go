@@ -126,6 +126,7 @@ unset WORKER_SECRET
 cat > /etc/aiori/worker.json <<EOF
 {
   "worker_id": "$INSTANCE_ID",
+  "worker_name": "%s",
   "listen_addr": "0.0.0.0:%d",
   "runtime_dir": "/var/lib/aiori-worker/runtime",
   "cloud_hypervisor_path": "/usr/local/bin/cloud-hypervisor",

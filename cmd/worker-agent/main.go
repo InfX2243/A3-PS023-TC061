@@ -31,6 +31,7 @@ type imageConfig struct {
 
 type fileConfig struct {
 	WorkerID                  string        `json:"worker_id"`
+	WorkerName                string        `json:"worker_name"`
 	ListenAddr                string        `json:"listen_addr"`
 	RuntimeDir                string        `json:"runtime_dir"`
 	CloudHypervisor            string        `json:"cloud_hypervisor_path"`
@@ -158,7 +159,8 @@ func heartbeatLoop(ctx context.Context, cfg fileConfig, secret string) {
 	defer ticker.Stop()
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("redirects disabled") }}
 	send := func() {
-		hostname, _ := os.Hostname()
+		hostname := strings.TrimSpace(cfg.WorkerName)
+		if hostname == "" { hostname, _ = os.Hostname() }
 		available := availableMemoryBytes()
 		if available > cfg.MaxMemoryBytes { available = cfg.MaxMemoryBytes }
 		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)

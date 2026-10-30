@@ -23,7 +23,7 @@ type API interface {
 
 type Client struct {
 	Region string
-	API    API // Optional injection point for tests; production uses the SDK credential chain.
+	API    API
 }
 
 type LaunchInput struct {

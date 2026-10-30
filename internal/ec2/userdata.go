@@ -216,7 +216,7 @@ systemctl enable --now aiori-metrics-collector
 		shellQuote(b.WorkerAgentURL), shellQuote(strings.ToLower(b.WorkerAgentSHA256)),
 		shellQuote(b.CloudHypervisorURL), shellQuote(strings.ToLower(b.CloudHypervisorSHA256)),
 		shellQuote(b.DiskURL), shellQuote(strings.ToLower(b.DiskSHA256)),
-		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID), nil
+		shellQuote(b.SecretParameter), b.NodeName, b.AgentPort, memoryBytes, b.ControllerURL, b.AgentPort, b.ImageID, b.ControllerURL), nil
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

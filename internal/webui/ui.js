@@ -476,6 +476,18 @@
     applyFilters();
   }
 
+
+  function initEC2Metrics() {
+    var panel=document.querySelector("[data-ec2-metrics]"); if(!panel)return;
+    var id=panel.getAttribute("data-instance-id"),region=panel.getAttribute("data-region");
+    var status=panel.querySelector("[data-metrics-status]"),updated=panel.querySelector("[data-metrics-updated]"),canvases={};
+    panel.querySelectorAll("[data-metric-chart]").forEach(function(el){canvases[el.getAttribute("data-metric-chart")]=el;});
+    function draw(canvas,values,max){if(!canvas)return;var width=Math.max(280,canvas.clientWidth||280),height=105,ratio=window.devicePixelRatio||1;canvas.width=width*ratio;canvas.height=height*ratio;var ctx=canvas.getContext("2d");ctx.scale(ratio,ratio);ctx.clearRect(0,0,width,height);ctx.strokeStyle="rgba(148,163,184,.25)";for(var g=1;g<=3;g++){var y=g*height/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(width,y);ctx.stroke();}if(!values.length)return;var peak=max||Math.max.apply(null,values)||1;ctx.strokeStyle="#3b82f6";ctx.lineWidth=2;ctx.beginPath();values.forEach(function(v,i){var x=values.length===1?width/2:i*(width-8)/(values.length-1)+4,y=height-5-Math.min(1,v/peak)*(height-12);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();}
+    function bytes(v){if(v<1024)return v+" B";var u=["KB","MB","GB","TB"],n=v/1024,i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(1)+" "+u[i];}
+    function refresh(){fetch("/aws/instances/"+encodeURIComponent(id)+"/metrics?region="+encodeURIComponent(region),{credentials:"same-origin",headers:{"Accept":"application/json"}}).then(function(r){if(!r.ok)throw new Error("Metrics endpoint returned "+r.status);return r.json();}).then(function(data){var samples=data.samples||[];if(!samples.length){status.textContent="Waiting for first sample";updated.textContent="The instance collector reports every 60 seconds. Confirm cloud-init completed and outbound HTTPS is available.";return;}status.textContent="Receiving telemetry";status.classList.add("running");var last=samples[samples.length-1],sets={cpu:samples.map(function(s){return s.cpu_percent;}),memory:samples.map(function(s){return s.memory_percent;}),disk:samples.map(function(s){return s.disk_percent;}),network:samples.map(function(s){return s.network_rx_bytes+s.network_tx_bytes;})};["cpu","memory","disk"].forEach(function(k){panel.querySelector('[data-metric-value="'+k+'"]').textContent=Number(last[k+"_percent"]).toFixed(1)+"%";draw(canvases[k],sets[k],100);});panel.querySelector('[data-metric-value="network"]').textContent=bytes(last.network_rx_bytes)+" ↓ / "+bytes(last.network_tx_bytes)+" ↑";draw(canvases.network,sets.network,Math.max.apply(null,sets.network)*1.1);updated.textContent="Last sample: "+new Date(last.timestamp).toLocaleString()+" · "+samples.length+" samples retained.";}).catch(function(e){status.textContent="Telemetry unavailable";updated.textContent=e.message+"; inspect bootstrap and controller reachability.";});}
+    refresh();window.setInterval(refresh,60000);
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initDocsNavigation();
     initDocsInteractions();
@@ -490,6 +502,7 @@
     initWorkerInventoryInteractions();
     initVMInventoryInteractions();
     initAWSInventoryInteractions();
+    initEC2Metrics();
   });
 }());
 

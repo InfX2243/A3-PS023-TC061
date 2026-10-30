@@ -98,8 +98,8 @@ func (c Client) Launch(ctx context.Context, in LaunchInput) (Instance, error) {
 	if in.SubnetID != "" && !validID(in.SubnetID, "subnet-") {
 		return Instance{}, errors.New("subnet ID must be a valid subnet- identifier when provided")
 	}
-	if in.InstanceType != "t3.micro" && in.InstanceType != "t3.small" {
-		return Instance{}, errors.New("only t3.micro and t3.small are enabled for the initial test workflow")
+	if in.InstanceType != "t3.micro" && in.InstanceType != "t3.small" && in.InstanceType != "c8i.xlarge" {
+		return Instance{}, errors.New("instance type must be t3.micro, t3.small, or c8i.xlarge")
 	}
 	if len(in.SecurityGroupIDs) > 5 {
 		return Instance{}, errors.New("provide no more than five security groups")

@@ -59,14 +59,15 @@ func (c Client) Launch(ctx context.Context,in LaunchInput) (Instance,error) {
 	in.Name=strings.TrimSpace(in.Name); in.Region=c.region(in.Region)
 	if in.Name=="" || len(in.Name)>128 { return Instance{},errors.New("instance name must be 1–128 characters") }
 	for _,r:=range in.Name { if !(r>='a'&&r<='z'||r>='A'&&r<='Z'||r>='0'&&r<='9'||r=='-'||r=='_'||r=='.'||r==' ') { return Instance{},errors.New("instance name may contain only letters, numbers, spaces, dot, dash, and underscore") } }
-	if in.Region=="" || len(in.Region)>32 || strings.ContainsAny(in.Region,"/\\r\\n ") { return Instance{},errors.New("a valid AWS region is required") }
+	if in.Region=="" || len(in.Region)>32 { return Instance{},errors.New("a valid AWS region is required") }
+	for _,r:=range in.Region { if !(r>='a'&&r<='z'||r>='0'&&r<='9'||r=='-') { return Instance{},errors.New("a valid AWS region is required") } }
 	if !validID(in.ImageID,"ami-") || !validID(in.SubnetID,"subnet-") { return Instance{},errors.New("a valid AMI ID and subnet ID are required") }
 	if in.InstanceType!="t3.micro" && in.InstanceType!="t3.small" { return Instance{},errors.New("only t3.micro and t3.small are enabled for the initial test workflow") }
 	if len(in.SecurityGroupIDs)==0 || len(in.SecurityGroupIDs)>5 { return Instance{},errors.New("provide between one and five preconfigured security groups") }
 	for _,id:=range in.SecurityGroupIDs { if !validID(id,"sg-") { return Instance{},errors.New("security group IDs must be valid sg- identifiers") } }
-	if in.KeyName!="" && (len(in.KeyName)>255 || strings.ContainsAny(in.KeyName,"\\r\\n")) { return Instance{},errors.New("invalid EC2 key pair name") }
+	if in.KeyName!="" && (len(in.KeyName)>255 || strings.ContainsAny(in.KeyName,string([]byte{10,13}))) { return Instance{},errors.New("invalid EC2 key pair name") }
 	if in.ClientToken=="" || len(in.ClientToken)>64 { return Instance{},errors.New("a stable client token is required for idempotent launch") }
-	if in.InstanceProfile!="" && (len(in.InstanceProfile)>128 || strings.ContainsAny(in.InstanceProfile,"\\r\\n")) { return Instance{},errors.New("invalid IAM instance profile name") }
+	if in.InstanceProfile!="" && (len(in.InstanceProfile)>128 || strings.ContainsAny(in.InstanceProfile,string([]byte{10,13}))) { return Instance{},errors.New("invalid IAM instance profile name") }
 	tags,_:=json.Marshal([]map[string]any{{"ResourceType":"instance","Tags":[]map[string]string{{"Key":"Name","Value":in.Name},{"Key":"ManagedBy","Value":"aiori-controller"},{"Key":"Role","Value":"worker-connectivity-test"}}}})
 	args:=[]string{"ec2","run-instances","--image-id",in.ImageID,"--instance-type",in.InstanceType,"--subnet-id",in.SubnetID,"--min-count","1","--max-count","1","--tag-specifications",string(tags)}
 	args=append(args,"--client-token",in.ClientToken)

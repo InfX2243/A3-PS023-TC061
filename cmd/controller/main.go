@@ -68,7 +68,7 @@ func main() {
 		MaxMemoryMiB: cfg.MaxMemoryMiB,
 		AllowedImages: cfg.AllowedImages,
 	}, cfg.SecureCookies)
-	ui.SetEC2Provisioner(ec2.Client{Region: os.Getenv("AWS_REGION")})
+	awsRegion := os.Getenv("AWS_REGION")\n\tif awsRegion == "" { awsRegion = os.Getenv("AWS_DEFAULT_REGION") }\n\tui.SetEC2Provisioner(ec2.Client{Region: awsRegion})
 	ui.Register(mux)
 	registry := workerhealth.NewRegistry(workerhealth.DefaultStaleAfter)
 	workerhealth.NewHandlerWithRecorder(registry, cfg.WorkerSharedSecret, cfg.OperatorToken, service).RegisterHeartbeatOnly(mux)

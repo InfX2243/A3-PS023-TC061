@@ -71,7 +71,7 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 	}
 	for name, sum := range map[string]string{
 		"worker agent": b.WorkerAgentSHA256, "Cloud Hypervisor": b.CloudHypervisorSHA256,
-		"kernel": b.KernelSHA256, "disk": b.DiskSHA256,
+		"disk": b.DiskSHA256,
 	} {
 		if !sha256Pattern.MatchString(sum) { return "", fmt.Errorf("%s SHA-256 must be 64 hexadecimal characters", name) }
 	}

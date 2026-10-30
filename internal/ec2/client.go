@@ -21,6 +21,7 @@ type API interface {
 	DescribeInstances(context.Context, *ec2.DescribeInstancesInput, ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
 	StartInstances(context.Context, *ec2.StartInstancesInput, ...func(*ec2.Options)) (*ec2.StartInstancesOutput, error)
 	StopInstances(context.Context, *ec2.StopInstancesInput, ...func(*ec2.Options)) (*ec2.StopInstancesOutput, error)
+	TerminateInstances(context.Context, *ec2.TerminateInstancesInput, ...func(*ec2.Options)) (*ec2.TerminateInstancesOutput, error)
 	AuthorizeSecurityGroupIngress(context.Context, *ec2.AuthorizeSecurityGroupIngressInput, ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupIngressOutput, error)
 }
 
@@ -253,6 +254,8 @@ func (c Client) Action(ctx context.Context, region, id, action string) error {
 		_, err = api.StartInstances(ctx, &ec2.StartInstancesInput{InstanceIds: []string{id}})
 	case "stop":
 		_, err = api.StopInstances(ctx, &ec2.StopInstancesInput{InstanceIds: []string{id}})
+	case "terminate":
+		_, err = api.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: []string{id}})
 	default:
 		return errors.New("unsupported EC2 lifecycle action")
 	}

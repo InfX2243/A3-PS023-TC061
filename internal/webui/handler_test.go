@@ -15,7 +15,7 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/ec2"
 )
 
-type fakeUIService struct { registeredID string; registeredName string; registeredEndpoint string; registeredMemory uint64; deletedID string; createCalls int; lastKey string; startCalls int; stopCalls int; vms []domain.VM; latest domain.Operation; latestErr error }
+type fakeUIService struct { registeredID string; registeredName string; registeredEndpoint string; registeredMemory uint64; deletedID string; createCalls int; lastKey string; startCalls int; stopCalls int; vms []domain.VM; latest domain.Operation; latestErr error; workers []domain.Worker }
 func (s *fakeUIService) RegisterWorker(_ context.Context, id, name, endpoint string, memory uint64) error {
 	s.registeredID, s.registeredName, s.registeredEndpoint, s.registeredMemory = id, name, endpoint, memory
 	return nil

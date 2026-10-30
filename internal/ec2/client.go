@@ -50,6 +50,7 @@ type Instance struct {
 	SubnetID  string
 	KeyName   string
 	LaunchTime time.Time
+	NestedVirtualization string
 	SecurityGroups []string
 	Placement struct{ AvailabilityZone string }
 }
@@ -133,11 +134,12 @@ func (c Client) Launch(ctx context.Context, in LaunchInput) (Instance, error) {
 			Tags: []types.Tag{
 				{Key: aws.String("Name"), Value: aws.String(in.Name)},
 				{Key: aws.String("ManagedBy"), Value: aws.String("aiori-controller")},
-				{Key: aws.String("Role"), Value: aws.String("worker-connectivity-test")},
+				{Key: aws.String("Role"), Value: aws.String(map[bool]string{true: "worker-node", false: "worker-connectivity-test"}[in.InstanceType == "c8i.xlarge"])},
 			},
 		}},
 	}
 	if in.UserData != "" { input.UserData = aws.String(base64.StdEncoding.EncodeToString([]byte(in.UserData))) }
+	if in.InstanceType == "c8i.xlarge" { input.CpuOptions = &types.CpuOptionsRequest{NestedVirtualization: types.NestedVirtualizationSpecificationEnabled} }
 	// If network IDs are omitted, EC2 uses the default subnet and security group in the default VPC.
 	if in.SubnetID != "" { input.SubnetId = aws.String(in.SubnetID) }
 	if len(in.SecurityGroupIDs) > 0 { input.SecurityGroupIds = in.SecurityGroupIDs }
@@ -271,6 +273,7 @@ func fromSDK(v types.Instance) Instance {
 	}
 	for _, group := range v.SecurityGroups { if aws.ToString(group.GroupId) != "" { out.SecurityGroups = append(out.SecurityGroups, aws.ToString(group.GroupId)) } }
 	if v.LaunchTime != nil { out.LaunchTime = v.LaunchTime.UTC() }
+	if v.CpuOptions != nil { out.NestedVirtualization = string(v.CpuOptions.NestedVirtualization) }
 	if v.StateReason != nil { out.StateReason = aws.ToString(v.StateReason.Message) }
 	if v.State != nil {
 		out.State.Name = string(v.State.Name)

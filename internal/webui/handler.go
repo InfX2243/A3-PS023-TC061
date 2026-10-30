@@ -180,7 +180,7 @@ func (h *Handler) instanceMetrics(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"instance_id": id, "samples": h.metricsStore.List(id, since)})
 }
 type ec2InventoryRow struct { Instance ec2.Instance; Worker domain.Worker; HasWorker bool }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string; DefaultAMI, DefaultSubnet, DefaultWorkerSecurityGroup, DefaultWorkerInstanceProfile string }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string; DefaultAMI, DefaultSubnet, DefaultWorkerSecurityGroup, DefaultWorkerInstanceProfile, ControllerURL string }
 
 func (h *Handler) ec2InstancePage(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
@@ -197,7 +197,7 @@ func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
 	region := r.URL.Query().Get("region")
 	if region == "" { region = os.Getenv("AWS_REGION"); if region == "" { region = os.Getenv("AWS_DEFAULT_REGION") } }
-	data := awsPageData{Region: region, DefaultAMI: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_AMI_ID"), DefaultSubnet: os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID"), DefaultWorkerSecurityGroup: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID"), DefaultWorkerInstanceProfile: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE"), Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
+	data := awsPageData{Region: region, DefaultAMI: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_AMI_ID"), DefaultSubnet: os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID"), DefaultWorkerSecurityGroup: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID"), DefaultWorkerInstanceProfile: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE"), Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled(), ControllerURL: h.ec2Bootstrap.ControllerURL}
 	workersByID := make(map[string]domain.Worker)
 	if h.service != nil {
 		workers, err := h.service.ListWorkers(r.Context())
@@ -227,6 +227,7 @@ func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if data.BootstrapEnabled {
 		bootstrap := h.ec2Bootstrap
+		bootstrap.ControllerURL = data.ControllerURL
 		bootstrap.NodeName = strings.TrimSpace(r.URL.Query().Get("name"))
 		if data.HasInstance && data.Instance.Name != "" { bootstrap.NodeName = data.Instance.Name }
 		if bootstrap.NodeName == "" { bootstrap.NodeName = "aiori-worker-test" }
@@ -254,7 +255,7 @@ func (h *Handler) launchEC2(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/aws?error="+url.QueryEscape(message)+"&region="+url.QueryEscape(region), http.StatusSeeOther)
 	}
 	if !h.ec2Bootstrap.Enabled() {
-		fail("EC2 worker launch blocked: bootstrap is not configured. Set VM_CONTROLLER_PUBLIC_URL, all verified worker artifact URLs and SHA-256 checksums, VM_CONTROLLER_WORKER_SECRET_PARAMETER, and VM_CONTROLLER_WORKER_IMAGE_ID; then restart the controller.")
+		fail("EC2 worker launch blocked: bootstrap is not configured. configure verified worker artifacts and VM_CONTROLLER_WORKER_IMAGE_ID on the controller.")
 		return
 	}
 	groups := strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"), ",", " "))
@@ -266,12 +267,9 @@ func (h *Handler) launchEC2(w http.ResponseWriter, r *http.Request) {
 		InstanceProfile: strings.TrimSpace(r.FormValue("instance_profile")),
 		ClientToken: r.FormValue("client_token"),
 	}
-	if in.InstanceProfile == "" {
-		fail("EC2 worker launch blocked: provide VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE or an instance profile with ssm:GetParameter access to the configured worker secret.")
-		return
-	}
-	bootstrap := h.ec2Bootstrap
+		bootstrap := h.ec2Bootstrap
 	bootstrap.NodeName = in.Name
+	bootstrap.ControllerURL = strings.TrimRight(strings.TrimSpace(r.FormValue("controller_url")), "/")
 	userData, err := bootstrap.BuildUserData()
 	if err != nil {
 		fail("EC2 worker launch blocked: invalid bootstrap configuration: " + err.Error())
@@ -285,7 +283,7 @@ func (h *Handler) launchEC2(w http.ResponseWriter, r *http.Request) {
 	instance, err := h.ec2Client.Launch(r.Context(), in)
 	if err != nil { fail(err.Error()); return }
 
-	notice := "EC2 launch accepted with checksum-verified worker bootstrap. Wait for cloud-init and the first authenticated heartbeat; confirm enrollment in Worker inventory."
+	notice := "EC2 launch accepted with worker-agent bootstrap. Wait for cloud-init and the first authenticated heartbeat; confirm enrollment in Worker inventory."
 	if bootstrap.ControllerSecurityGroupID != "" {
 		ingress, ok := h.ec2Client.(ec2IngressProvisioner)
 		if !ok {

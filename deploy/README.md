@@ -3,7 +3,7 @@
 This deployment is intentionally split into two planes:
 
 - **Controller**: a small Linux EC2 instance (a t3.micro can host the Go controller, SQLite metadata, and UI for a prototype). It does not run guest VMs.
-- **Worker**: a separate KVM-capable Linux host running the worker agent and Cloud Hypervisor. A worker needs usable /dev/kvm, enough RAM/CPU, a staged allowlisted guest image, and network reachability to the controller. Do not assume a t3.micro is suitable as a virtualization worker.
+- **Worker**: a separate KVM-capable Linux host running the worker agent and Cloud Hypervisor (the EC2 console's `c8i.xlarge` profile requests nested virtualization). A worker needs usable /dev/kvm, enough RAM/CPU, a staged allowlisted guest image, and network reachability to the controller. Do not assume a t3.micro is suitable as a virtualization worker.
 
 ## 1. Configure secrets
 

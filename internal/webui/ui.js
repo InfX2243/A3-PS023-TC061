@@ -60,6 +60,30 @@
     });
   }
 
+  function initWorkerInventoryInteractions() {
+    var search = document.querySelector("[data-worker-search]");
+    var rows = Array.prototype.slice.call(document.querySelectorAll("[data-worker-row]"));
+    var empty = document.querySelector("[data-worker-empty-filter]");
+    if (search && rows.length) {
+      search.addEventListener("input", function () {
+        var query = search.value.trim().toLowerCase();
+        var visible = 0;
+        rows.forEach(function (row) {
+          var match = (row.getAttribute("data-search-text") || row.textContent).toLowerCase().indexOf(query) !== -1;
+          row.hidden = !match;
+          if (match) visible++;
+        });
+        if (empty) empty.hidden = visible !== 0;
+      });
+    }
+    document.querySelectorAll("form[data-confirm]").forEach(function (form) {
+      form.addEventListener("submit", function (event) {
+        var message = form.getAttribute("data-confirm");
+        if (message && !window.confirm(message)) event.preventDefault();
+      });
+    });
+  }
+
   function initDashboardInteractions() {
     document.querySelectorAll("[data-alert-dismiss]").forEach(function (button) {
       button.addEventListener("click", function () {
@@ -335,6 +359,7 @@
     initLandingMotion();
     initLoginInteractions();
     initDashboardInteractions();
+    initWorkerInventoryInteractions();
   });
 }());
 

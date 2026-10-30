@@ -227,7 +227,7 @@ func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
 func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {
  h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
  r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token",http.StatusForbidden); return }
- action,id:=r.PathValue("action"),r.PathValue("instanceID"); if action!="start" && action!="stop" { http.Error(w,"unsupported EC2 action",http.StatusBadRequest); return }
+ action,id:=r.PathValue("action"),r.PathValue("instanceID"); if action!="start" && action!="stop" && action!="terminate" { http.Error(w,"unsupported EC2 action",http.StatusBadRequest); return }
  if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
  region:=strings.TrimSpace(r.FormValue("region")); if err:=h.ec2Client.Action(r.Context(),region,id,action); err!=nil { http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(id)+"&region="+url.QueryEscape(region)+"&error="+url.QueryEscape(err.Error()),http.StatusSeeOther); return }
  http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(id)+"&region="+url.QueryEscape(region)+"&notice="+url.QueryEscape("EC2 "+action+" request accepted; refresh to confirm state."),http.StatusSeeOther)

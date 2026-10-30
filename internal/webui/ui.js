@@ -60,6 +60,17 @@
     });
   }
 
+  function initDashboardInteractions() {
+    document.querySelectorAll("[data-alert-dismiss]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var alert = button.closest("[data-dashboard-alert]");
+        if (!alert) return;
+        alert.classList.add("is-dismissed");
+        alert.setAttribute("aria-hidden", "true");
+      });
+    });
+  }
+
   function initLoginInteractions() {
     document.querySelectorAll("[data-password-toggle]").forEach(function (toggle) {
       var input = document.getElementById(toggle.getAttribute("data-password-toggle"));
@@ -326,6 +337,7 @@
     initLandingPreviewTabs();
     initLandingMotion();
     initLoginInteractions();
+    initDashboardInteractions();
   });
 }());
 

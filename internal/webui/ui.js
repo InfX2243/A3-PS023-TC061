@@ -325,6 +325,7 @@
     initLandingNavigation();
     initLandingPreviewTabs();
     initLandingMotion();
+    initLoginInteractions();
   });
-}());  document.addEventListener("DOMContentLoaded", function () { initLoginInteractions(); });
+}());
 

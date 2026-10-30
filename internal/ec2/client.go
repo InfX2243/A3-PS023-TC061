@@ -129,6 +129,7 @@ func (c Client) Launch(ctx context.Context, in LaunchInput) (Instance, error) {
 		InstanceType:     types.InstanceType(in.InstanceType),
 		MinCount:         aws.Int32(1),
 		MaxCount:         aws.Int32(1),
+		MetadataOptions: &types.InstanceMetadataOptionsRequest{HttpEndpoint: types.InstanceMetadataEndpointStateEnabled, HttpTokens: types.HttpTokensStateRequired, HttpPutResponseHopLimit: aws.Int32(1)},
 		ClientToken:      aws.String(in.ClientToken),
 		TagSpecifications: []types.TagSpecification{{
 			ResourceType: types.ResourceTypeInstance,

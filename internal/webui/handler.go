@@ -44,6 +44,7 @@ type Handler struct {
 	limits Limits
 	secureCookie bool
 	ec2Client ec2Provisioner
+	ec2Bootstrap ec2.BootstrapConfig
 	templates *template.Template
 }
 
@@ -155,14 +156,15 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Instances []ec2.Instance; InventoryError string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
+func (h *Handler) SetEC2Bootstrap(config ec2.BootstrapConfig) { h.ec2Bootstrap = config }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Instances []ec2.Instance; InventoryError string; BootstrapEnabled bool; Region, Error, Notice, CSRFToken, IdempotencyKey string }
 
 func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
 	region := r.URL.Query().Get("region")
 	if region == "" { region = os.Getenv("AWS_REGION"); if region == "" { region = os.Getenv("AWS_DEFAULT_REGION") } }
-	data := awsPageData{Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2.Instance{}}
+	data := awsPageData{Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2.Instance{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
 	if h.ec2Client == nil {
 		if data.Error == "" { data.Error = "EC2 provisioning is unavailable. Configure AWS_REGION and the AWS SDK credential chain on the controller." }
 	} else if inventory, ok := h.ec2Client.(ec2InventoryProvisioner); ok {
@@ -184,8 +186,11 @@ func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
  if !safeFormID(r.FormValue("client_token")) { http.Error(w,"invalid launch token; reload the form",http.StatusBadRequest); return }
  groups:=strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"),","," "))
  in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile")),ClientToken:r.FormValue("client_token")}
+ if h.ec2Bootstrap.Enabled() { userData, err := h.ec2Bootstrap.BuildUserData(); if err != nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap configuration is invalid: "+err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; in.UserData = userData }
  instance,err:=h.ec2Client.Launch(r.Context(),in); if err!=nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape(err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }
- http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape("EC2 launch accepted. Install the worker agent and register it separately."),http.StatusSeeOther)
+ notice := "EC2 launch accepted. This instance was launched without worker-agent bootstrap; it is not an enrolled worker."
+ if h.ec2Bootstrap.Enabled() { notice = "EC2 launch accepted with checksum-verified worker bootstrap. Wait for cloud-init and the first authenticated heartbeat; agent health is shown separately in Worker inventory." }
+ http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape(notice),http.StatusSeeOther)
 }
 
 func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {

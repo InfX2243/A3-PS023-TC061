@@ -26,6 +26,13 @@ The controller instance is public so the operator can reach the initial console.
 5. Acknowledge the IAM resource creation capability and create the stack.
 6. Wait for `CREATE_COMPLETE`. Open the `ControllerURL` output and sign in with the generated operator token. Retrieve it from the controller's SSM parameter using the read command below.
 
+You can also deploy/update from a machine with AWS CLI credentials:
+
+```sh
+chmod +x infra/deploy.sh
+AWS_REGION=ap-south-1 ./infra/deploy.sh aiori-dev YOUR.PUBLIC.IP/32 feat/cloudformation-infrastructure-monitoring
+```
+
 The template uses a public HTTP endpoint for this initial restricted test setup. It is **not a production TLS deployment**. Do not widen `AdminCIDR`. Before production or use over untrusted networks, put the controller behind HTTPS (for example, an ALB with ACM and a domain) and enable secure cookies. Worker API port 9090 is never public.
 
 ## Retrieve the initial operator token

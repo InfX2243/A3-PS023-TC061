@@ -17,6 +17,7 @@ import (
 
 	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
+	"github.com/InfX2243/A3-PS023-TC061/internal/ec2"
 )
 
 type Service interface {
@@ -41,6 +42,7 @@ type Handler struct {
 	loginPassword string
 	limits Limits
 	secureCookie bool
+	ec2Client ec2Provisioner
 	templates *template.Template
 }
 
@@ -48,6 +50,7 @@ type vmRow struct { VM domain.VM; Operation domain.Operation; HasOperation bool 
 type dashboardData struct { Workers []domain.Worker; VMs []vmRow; Error string; Notice string; Refreshing bool; CSRFToken string }
 type formData struct { Limits Limits; Error string; IdempotencyKey string; CSRFToken string }
 type workerPageData struct { Workers []domain.Worker; Error string; Notice string; CSRFToken string }
+type ec2Provisioner interface { Launch(context.Context, ec2.LaunchInput) (ec2.Instance,error); Describe(context.Context,string,string) (ec2.Instance,error); Action(context.Context,string,string,string) error }
 type workerManagementService interface {
 	RegisterWorker(context.Context, string, string, string, uint64) error
 	DeleteWorker(context.Context, string) error
@@ -58,7 +61,7 @@ func NewHandler(service Service, operatorToken string, limits Limits, secureCook
 }
 
 func NewHandlerWithCredentials(service Service, operatorToken, username, password string, limits Limits, secureCookie bool) *Handler {
-	return &Handler{service: service, token: operatorToken, loginUsername: username, loginPassword: password, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Funcs(template.FuncMap{"divMiB": func(v uint64) uint64 { return v / (1024 * 1024) }, "stateIs": func(state domain.VMState, expected string) bool { return string(state) == expected }, "countWorkerState": func(workers []domain.Worker, expected string) int { count := 0; for _, worker := range workers { if string(worker.State) == expected { count++ } }; return count }, "countVMState": func(vms []vmRow, expected string) int { count := 0; for _, vm := range vms { if string(vm.VM.Observed) == expected { count++ } }; return count }, "memoryPercent": func(available, limit uint64) int { if limit == 0 { return 0 }; percent := int(available * 100 / limit); if percent > 100 { return 100 }; if percent < 0 { return 0 }; return percent }}).Parse(pageTemplates + docsPageTemplate + workersPageTemplate))}
+	return &Handler{service: service, token: operatorToken, loginUsername: username, loginPassword: password, limits: limits, secureCookie: secureCookie, templates: template.Must(template.New("pages").Funcs(template.FuncMap{"divMiB": func(v uint64) uint64 { return v / (1024 * 1024) }, "stateIs": func(state domain.VMState, expected string) bool { return string(state) == expected }, "countWorkerState": func(workers []domain.Worker, expected string) int { count := 0; for _, worker := range workers { if string(worker.State) == expected { count++ } }; return count }, "countVMState": func(vms []vmRow, expected string) int { count := 0; for _, vm := range vms { if string(vm.VM.Observed) == expected { count++ } }; return count }, "memoryPercent": func(available, limit uint64) int { if limit == 0 { return 0 }; percent := int(available * 100 / limit); if percent > 100 { return 100 }; if percent < 0 { return 0 }; return percent }}).Parse(pageTemplates + docsPageTemplate + workersPageTemplate + awsPageTemplate))}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -72,6 +75,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console", h.dashboard)
 	mux.HandleFunc("GET /console/", h.dashboard)
 	mux.HandleFunc("GET /workers", h.workersPage)
+	mux.HandleFunc("GET /aws", h.awsPage)
+	mux.HandleFunc("POST /aws/instances", h.launchEC2)
+	mux.HandleFunc("POST /aws/instances/{instanceID}/{action}", h.ec2Action)
 	mux.HandleFunc("POST /workers", h.registerWorker)
 	mux.HandleFunc("POST /workers/{workerID}/delete", h.deleteWorker)
 	mux.HandleFunc("GET /vms/new", h.newVMPage)
@@ -146,6 +152,35 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "dashboard", dashboardData{Workers:workers, VMs:rows, Notice:r.URL.Query().Get("notice"), Error:r.URL.Query().Get("error"), Refreshing:refreshing, CSRFToken:h.csrfToken(r)})
 }
 
+func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Region, Error, Notice, CSRFToken string }
+
+func (h *Handler) awsPage(w http.ResponseWriter,r *http.Request) {
+ h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
+ data:=awsPageData{Region:r.URL.Query().Get("region"),Notice:r.URL.Query().Get("notice"),Error:r.URL.Query().Get("error"),CSRFToken:h.csrfToken(r)}
+ if id:=r.URL.Query().Get("instance_id"); id!="" { if h.ec2Client==nil { data.Error="EC2 provisioning is not configured." } else if instance,err:=h.ec2Client.Describe(r.Context(),data.Region,id); err!=nil { data.Error="Could not read EC2 lifecycle state: "+err.Error() } else { data.Instance=instance; data.HasInstance=true } }
+ if h.ec2Client==nil && data.Error=="" { data.Error="EC2 provisioning is unavailable. Install AWS CLI and configure controller credentials." }
+ h.render(w,"aws",data)
+}
+
+func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
+ h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
+ r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token or form",http.StatusForbidden); return }
+ if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
+ groups:=strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"),","," "))
+ in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile"))}
+ instance,err:=h.ec2Client.Launch(r.Context(),in); if err!=nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape(err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }
+ http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape("EC2 launch accepted. Install the worker agent and register it separately."),http.StatusSeeOther)
+}
+
+func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {
+ h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
+ r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token",http.StatusForbidden); return }
+ action,id:=r.PathValue("action"),r.PathValue("instanceID"); if action!="start" && action!="stop" { http.Error(w,"unsupported EC2 action",http.StatusBadRequest); return }
+ if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
+ region:=strings.TrimSpace(r.FormValue("region")); if err:=h.ec2Client.Action(r.Context(),region,id,action); err!=nil { http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(id)+"&region="+url.QueryEscape(region)+"&error="+url.QueryEscape(err.Error()),http.StatusSeeOther); return }
+ http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(id)+"&region="+url.QueryEscape(region)+"&notice="+url.QueryEscape("EC2 "+action+" request accepted; refresh to confirm state."),http.StatusSeeOther)
+}
 func (h *Handler) workersPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }

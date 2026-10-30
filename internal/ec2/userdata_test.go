@@ -52,3 +52,12 @@ func TestBuildUserDataRejectsUnsafeArtifactAndMissingNetworkIdentity(t *testing.
 		})
 	}
 }
+
+
+func TestBuildUserDataAllowsOnlyPrivateVPCHTTPForController(t *testing.T) {
+	cfg := validBootstrapConfig()
+	cfg.ControllerURL = "http://10.42.1.10:8080"
+	if _, err := cfg.BuildUserData(); err != nil { t.Fatalf("private VPC HTTP controller endpoint rejected: %v", err) }
+	cfg.ControllerURL = "http://198.51.100.10:8080"
+	if _, err := cfg.BuildUserData(); err == nil { t.Fatal("public HTTP controller endpoint must be rejected") }
+}

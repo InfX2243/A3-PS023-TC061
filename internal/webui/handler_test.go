@@ -22,7 +22,8 @@ func (s *fakeUIService) RegisterWorker(_ context.Context, id, name, endpoint str
 }
 func (s *fakeUIService) DeleteWorker(_ context.Context, id string) error { s.deletedID = id; return nil }
 
-func (*fakeUIService) ListWorkers(context.Context) ([]domain.Worker, error) {
+func (s *fakeUIService) ListWorkers(context.Context) ([]domain.Worker, error) {
+	if s.workers != nil { return s.workers, nil }
 	return []domain.Worker{{ID:"worker-a", Name:"Worker A", State:domain.WorkerHealthy, AvailableMemoryBytes:2*1024*1024*1024, MemoryLimitBytes:4*1024*1024*1024}}, nil
 }
 func (s *fakeUIService) ListVMs(context.Context) ([]domain.VM, error) { return s.vms, nil }
@@ -184,7 +185,8 @@ func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
 }
 
 func TestDashboardRendersControlCentreChartsAlertsAndScrollableWorkspace(t *testing.T) {
-	_, handler := newTestUI()
+	h, handler := newTestUI()
+	h.service.(*fakeUIService).workers = []domain.Worker{{ID: "worker-stale", Name: "Stale Worker", State: domain.WorkerStale, AvailableMemoryBytes: 1024, MemoryLimitBytes: 2048}}
 	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
 	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	loginResponse := httptest.NewRecorder()

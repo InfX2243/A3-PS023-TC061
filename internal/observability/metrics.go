@@ -4,6 +4,8 @@ package observability
 
 import (
 	"encoding/json"
+	"crypto/subtle"
+	"io"
 	"errors"
 	"net/http"
 	"regexp"
@@ -80,10 +82,8 @@ func bearer(r *http.Request) string {
 	return ""
 }
 func equalSecret(got, want string) bool {
-	if want == "" || len(got) != len(want) { return false }
-	var diff byte
-	for i := range got { diff |= got[i] ^ want[i] }
-	return diff == 0
+	if want == "" { return false }
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }
 func (h Handler) ingest(w http.ResponseWriter, r *http.Request) {
 	if !equalSecret(bearer(r), h.WorkerSecret) { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
@@ -91,6 +91,9 @@ func (h Handler) ingest(w http.ResponseWriter, r *http.Request) {
 	var sample Sample
 	dec := json.NewDecoder(r.Body); dec.DisallowUnknownFields()
 	if err := dec.Decode(&sample); err != nil { http.Error(w, "invalid metrics payload", http.StatusBadRequest); return }
+	var trailing any
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) { http.Error(w, "metrics payload must contain exactly one JSON value", http.StatusBadRequest); return }
+	if h.Store == nil { http.Error(w, "metrics store unavailable", http.StatusServiceUnavailable); return }
 	if err := h.Store.Add(sample); err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
 	w.WriteHeader(http.StatusAccepted)
 }

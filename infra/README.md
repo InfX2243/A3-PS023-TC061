@@ -61,10 +61,10 @@ aws cloudformation describe-stacks \
 
 Create the DNS alias/CNAME for `DomainName` using `LoadBalancerDNSName`. Wait for the ALB target to become healthy, then open `ControllerURL`.
 
-## Security and operational notes
+Retrieve the initial operator credentials (use a secure terminal and do not paste the values into chat):\n\n\`\`\`sh\naws ssm get-parameter --name /aiori/operator/password --with-decryption --query 'Parameter.Value' --output text --region ap-south-1\naws ssm get-parameter --name /aiori/operator/token --with-decryption --query 'Parameter.Value' --output text --region ap-south-1\n\`\`\`\n\n## Security and operational notes
 
 - The bootstrap generates distinct random operator token, operator password, and worker shared secret. The worker shared secret is stored as an SSM SecureString; it is never put in EC2 user data.
-- The generated operator password must be captured through a secure provisioning channel before using the login page. Do not place credentials in CloudFormation outputs, tags, shell history, or source control.
+- The generated operator password and token are written as separate SSM SecureString parameters. Retrieve them only from an authorized workstation and keep them out of shell history and source control:
 - Controller and worker IAM roles are attached to EC2; do not add long-lived AWS access keys to `.env`.
 - IMDSv2 is required on the controller. Keep the worker-agent security group source restricted to the controller security group.
 - CloudWatch dashboard and log groups are provisioned by the template. EC2 basic CPU/network/disk-I/O metrics are available automatically; memory and filesystem metrics require the CloudWatch Agent to be installed and configured on each host.

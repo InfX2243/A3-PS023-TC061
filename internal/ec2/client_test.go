@@ -49,7 +49,7 @@ func TestLaunchRejectsUnsafeInputBeforeCallingAWS(t *testing.T) {
 	c:=Client{API:f}
 	base:=LaunchInput{Name:"test-node",Region:"ap-south-1",ImageID:"ami-123",InstanceType:"t3.micro",SubnetID:"subnet-123",SecurityGroupIDs:[]string{"sg-123"},ClientToken:"form-token"}
 	cases:=[]struct{name string; mutate func(*LaunchInput)}{
-		{"unapproved instance type",func(v *LaunchInput){v.InstanceType="c8i.xlarge"}},
+		{"unapproved instance type",func(v *LaunchInput){v.InstanceType="c7i.xlarge"}},
 		{"missing client token",func(v *LaunchInput){v.ClientToken=""}},
 		{"invalid security group",func(v *LaunchInput){v.SecurityGroupIDs=[]string{"sg-bad/evil"}}},
 		{"invalid AMI",func(v *LaunchInput){v.ImageID="ami-;touch"}},
@@ -67,7 +67,7 @@ func TestDescribeAndActionsUseSDK(t *testing.T) {
 	if err:=c.Action(context.Background(),"","i-123","start"); err!=nil { t.Fatal(err) }
 	if err:=c.Action(context.Background(),"","i-123","stop"); err!=nil { t.Fatal(err) }
 	if len(f.started)!=1 || f.started[0]!="i-123" || len(f.stopped)!=1 { t.Fatal("SDK lifecycle API was not called") }
-	if err:=c.Action(context.Background(),"","i-123","terminate"); err==nil { t.Fatal("terminate must remain unavailable") }
+	if err:=c.Action(context.Background(),"","i-123","terminate"); err!=nil || len(f.terminated)!=1 { t.Fatalf("terminate failed: %v",err) }
 }
 
 func TestLaunchRequiresClientToken(t *testing.T) {

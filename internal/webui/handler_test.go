@@ -562,3 +562,34 @@ func TestSharedDesignSystemStylesheetIsServedAndApplied(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkerInventoryUsesFixedNavigationAndSingleScrollableWorkspace(t *testing.T) {
+	h, handler := newTestUI()
+	fake := h.service.(*fakeUIService)
+	fake.workers = []domain.Worker{
+		{ID: "worker-a", Name: "Worker Alpha", Endpoint: "http://10.0.0.1:9090", State: domain.WorkerHealthy, AvailableMemoryBytes: 3 * 1024 * 1024 * 1024, MemoryLimitBytes: 4 * 1024 * 1024 * 1024},
+		{ID: "worker-b", Name: "Worker Beta", Endpoint: "http://10.0.0.2:9090", State: domain.WorkerStale, MemoryLimitBytes: 8 * 1024 * 1024 * 1024},
+	}
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/workers", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("worker inventory status=%d body=%s", response.Code, response.Body.String()) }
+	body := response.Body.String()
+	for _, expected := range []string{
+		"worker-inventory-body", "worker-shell", "worker-main", "worker-topbar", "worker-content",
+		"Worker Alpha", "worker-a", "Worker Beta", "worker-b", "Registered nodes", "Healthy",
+		"Stale", "data-worker-search", "data-worker-row", "Automatic enrollment",
+		"Register an existing worker", "data-confirm=", "href=\"/aws\"",
+	} {
+		if !strings.Contains(body, expected) { t.Errorf("worker inventory omitted %q", expected) }
+	}
+	if strings.Contains(body, "max-height:560px") || strings.Contains(body, "worker-table-scroll{max-height:600px") {
+		t.Fatal("worker inventory should not create a second vertical scrolling region inside the workspace")
+	}
+}
+

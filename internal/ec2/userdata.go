@@ -21,7 +21,6 @@ type BootstrapConfig struct {
 	CloudHypervisorSHA256 string
 	DiskURL string
 	DiskSHA256 string
-	SecretParameter string
 	ControllerSecurityGroupID string
 	ImageID string
 	NodeName string
@@ -50,7 +49,7 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 // Enabled reports whether enough configuration exists to generate a complete
 // worker bootstrap. A partial configuration is intentionally not used.
 func (b BootstrapConfig) Enabled() bool {
-	return b.ControllerURL != "" && b.WorkerAgentURL != "" && b.WorkerAgentSHA256 != "" &&
+	return b.WorkerAgentURL != "" && b.WorkerAgentSHA256 != "" &&
 		b.CloudHypervisorURL != "" && b.CloudHypervisorSHA256 != "" &&
 		b.DiskURL != "" && b.DiskSHA256 != "" && b.WorkerSharedSecret != "" && b.ImageID != ""
 }

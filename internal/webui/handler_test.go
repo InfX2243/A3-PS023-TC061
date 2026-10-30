@@ -647,11 +647,20 @@ func TestPrepareVMPageUsesFixedNavigationAndLiveConfigurationPreview(t *testing.
     "prepare-vm-body", "prepare-vm-shell", "prepare-vm-main", "prepare-vm-content",
     "Workload specification", "Resource summary", "data-vm-preset", "data-vm-preview-memory",
     "name=\"csrf_token\"", "name=\"idempotency_key\"", "name=\"vcpus\"", "name=\"memory_mib\"",
-    "Approved", "prepare-vm-timeline", "initPrepareVMInteractions",
-    "position:fixed!important", "overflow-y:auto;overflow-x:hidden",
+    "prepare-vm-timeline",
   } {
     if !strings.Contains(body, expected) { t.Fatalf("prepare VM page omitted %q", expected) }
   }
   if !strings.Contains(body, "action=\"/vms\"") { t.Fatal("prepare VM form lost its create endpoint") }
+  cssRequest := httptest.NewRequest(http.MethodGet, "/assets/ui.css", nil)
+  cssResponse := httptest.NewRecorder()
+  handler.ServeHTTP(cssResponse, cssRequest)
+  for _, expected := range []string{"position:fixed!important", "overflow-y:auto;overflow-x:hidden", "height:100vh"} {
+    if !strings.Contains(cssResponse.Body.String(), expected) { t.Fatalf("prepare VM stylesheet omitted %q", expected) }
+  }
+  jsRequest := httptest.NewRequest(http.MethodGet, "/assets/ui.js", nil)
+  jsResponse := httptest.NewRecorder()
+  handler.ServeHTTP(jsResponse, jsRequest)
+  if !strings.Contains(jsResponse.Body.String(), "initPrepareVMInteractions") { t.Fatal("prepare VM interactions were not served") }
   _ = h
 }

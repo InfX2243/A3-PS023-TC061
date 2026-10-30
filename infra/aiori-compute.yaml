@@ -178,6 +178,15 @@ Resources:
                 Effect: Allow
                 Action: [ssm:PutParameter, ssm:GetParameter, ssm:GetParameters]
                 Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aiori/${AWS::StackName}/*'
+              - Sid: UseStackScopedParameterStoreKey
+                Effect: Allow
+                Action: [kms:Encrypt, kms:Decrypt]
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
+                  StringLike:
+                    kms:EncryptionContext:PARAMETER_ARN: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aiori/${AWS::StackName}/*'
               - Sid: PublishControllerLogs
                 Effect: Allow
                 Action: [logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogStreams]
@@ -205,6 +214,13 @@ Resources:
               - Effect: Allow
                 Action: ssm:GetParameter
                 Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aiori/${AWS::StackName}/worker/shared-secret'
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
+                    kms:EncryptionContext:PARAMETER_ARN: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aiori/${AWS::StackName}/worker/shared-secret'
   ControllerInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:

@@ -3,6 +3,7 @@ package ec2
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"regexp"
@@ -31,6 +32,7 @@ type LaunchInput struct {
 	Name, Region, ImageID, InstanceType, SubnetID string
 	SecurityGroupIDs                              []string
 	KeyName, InstanceProfile, ClientToken         string
+	UserData                                      string
 }
 
 type Instance struct {
@@ -133,6 +135,7 @@ func (c Client) Launch(ctx context.Context, in LaunchInput) (Instance, error) {
 			},
 		}},
 	}
+	if in.UserData != "" { input.UserData = aws.String(base64.StdEncoding.EncodeToString([]byte(in.UserData))) }
 	// If network IDs are omitted, EC2 uses the default subnet and security group in the default VPC.
 	if in.SubnetID != "" { input.SubnetId = aws.String(in.SubnetID) }
 	if len(in.SecurityGroupIDs) > 0 { input.SecurityGroupIds = in.SecurityGroupIDs }

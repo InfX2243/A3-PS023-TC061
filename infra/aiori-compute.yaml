@@ -6,9 +6,6 @@ Parameters:
     Description: Trusted operator IPv4 CIDR allowed to reach the controller UI. Use your current public IP with /32.
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
     ConstraintDescription: Enter an IPv4 CIDR such as 203.0.113.10/32. Do not use 0.0.0.0/0.
-  Ubuntu2404AMI:
-    Type: AWS::EC2::Image::Id
-    Description: Ubuntu 24.04 LTS x86_64 AMI ID for this region.
   GitRef:
     Type: String
     Default: feat/cloudformation-infrastructure-monitoring
@@ -268,7 +265,7 @@ Resources:
     Type: AWS::EC2::Instance
     DependsOn: [PublicSubnetAssociation, ControllerLogGroup, WorkerLogGroup, SystemLogGroup]
     Properties:
-      ImageId: !Ref Ubuntu2404AMI
+      ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
       InstanceType: !Ref ControllerInstanceType
       IamInstanceProfile: !Ref ControllerInstanceProfile
       SubnetId: !Ref ControllerSubnet
@@ -306,6 +303,7 @@ Resources:
           REGION=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$META/placement/region")
           PRIVATE_IP=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$META/local-ipv4")
           PUBLIC_IP=$(curl --fail --silent --show-error -H "X-aws-ec2-metadata-token: $TOKEN" "$META/public-ipv4")
+          WORKER_AMI_ID=$(aws ssm get-parameter --region "$REGION" --name /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id --query 'Parameter.Value' --output text)
           WORKER_SECRET=$(openssl rand -hex 32)
           OPERATOR_TOKEN=$(openssl rand -hex 32)
           aws ssm put-parameter --region "$REGION" --name '/aiori/${AWS::StackName}/worker/shared-secret' --type SecureString --value "$WORKER_SECRET" --overwrite
@@ -347,7 +345,7 @@ Resources:
           VM_CONTROLLER_DEFAULT_SUBNET_ID=${ControllerSubnet}
           VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID=${WorkerSecurityGroup}
           VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE=${WorkerInstanceProfile}
-          VM_CONTROLLER_DEFAULT_IMAGE_ID=${Ubuntu2404AMI}
+          VM_CONTROLLER_DEFAULT_IMAGE_ID=$WORKER_AMI_ID
           VM_CONTROLLER_CLOUDWATCH_DASHBOARD_URL=https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-AIORI-Compute
           EOF
           unset OPERATOR_TOKEN

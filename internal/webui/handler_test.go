@@ -224,6 +224,38 @@ func TestLandingPageIsPublicAndHasDistinctDocumentationAndLoginRoutes(t *testing
 	}
 }
 
+func TestLoginPageHasAccessiblePremiumAuthExperience(t *testing.T) {
+	_, handler := newTestUI()
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("login page status = %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{"auth-page", "auth-showcase", "auth-content", "SECURE OPERATOR ACCESS", "data-password-toggle=\"token\"", "auth-assurance", "href=\"/docs\"", "Skip to main content", "src=\"/assets/ui.js\""} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("login page omitted %q", expected)
+		}
+	}
+	if strings.Contains(body, "name=\"username\"") || strings.Contains(body, "name=\"password\"") {
+		t.Fatal("token-auth login should not render username/password fields")
+	}
+}
+
+func TestCredentialLoginPageRendersUsernamePasswordAndToggle(t *testing.T) {
+	mux := http.NewServeMux()
+	h := NewHandlerWithCredentials(&fakeUIService{}, "session-signing-secret", "operator", "correct-horse-battery-staple-2026", Limits{}, false)
+	h.Register(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/login", nil))
+	body := response.Body.String()
+	for _, expected := range []string{"name=\"username\"", "name=\"password\"", "autocomplete=\"username\"", "autocomplete=\"current-password\"", "data-password-toggle=\"password\""} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("credential login page omitted %q", expected)
+		}
+	}
+}
+
 func TestLoginRedirectsToOperatorConsole(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")

@@ -58,7 +58,7 @@ func TestLaunchRejectsUnsafeInputBeforeCallingAWS(t *testing.T) {
 }
 
 func TestDescribeAndActionsUseSDK(t *testing.T) {
-	f:=&fakeAPI{describeOut:&ec2.DescribeInstancesOutput{Reservations:[]types.Reservation{{Instances:[]types.Instance{{InstanceId:aws.String("i-123"),PrivateIpAddress:aws.String("10.0.0.2"),Placement:&types.Placement{AvailabilityZone:aws.String("ap-south-1a")}}}}}}}
+	f:=&fakeAPI{describeOut:&ec2.DescribeInstancesOutput{Reservations:[]types.Reservation{{Instances:[]types.Instance{{InstanceId:aws.String("i-123"),PrivateIpAddress:aws.String("10.0.0.2"),Tags:[]types.Tag{{Key:aws.String("ManagedBy"),Value:aws.String("aiori-controller")}},Placement:&types.Placement{AvailabilityZone:aws.String("ap-south-1a")}}}}}}}
 	c:=Client{Region:"ap-south-1",API:f}
 	got,err:=c.Describe(context.Background(),"","i-123")
 	if err!=nil || got.PrivateIP!="10.0.0.2" || got.Placement.AvailabilityZone!="ap-south-1a" { t.Fatalf("describe=%#v err=%v",got,err) }
@@ -103,4 +103,14 @@ func TestAllowControllerIngressUsesOnlySourceSecurityGroup(t *testing.T) {
 	if aws.ToString(permission.IpProtocol) != "tcp" || aws.ToInt32(permission.FromPort) != 9090 || aws.ToInt32(permission.ToPort) != 9090 { t.Fatalf("unexpected port permission: %#v", permission) }
 	if len(permission.UserIdGroupPairs) != 1 || aws.ToString(permission.UserIdGroupPairs[0].GroupId) != "sg-control123" || len(permission.IpRanges) != 0 { t.Fatalf("ingress must be restricted to controller SG, got %#v", permission) }
 	if err := (Client{Region: "ap-south-1", API: f}).AllowControllerIngress(context.Background(), "", []string{"sg-worker123"}, "sg-control123", 22); err == nil { t.Fatal("must reject unexpected low port") }
+}
+
+func TestDescribeAndActionsRejectUnmanagedInstance(t *testing.T) {
+	f := &fakeAPI{describeOut: &ec2.DescribeInstancesOutput{Reservations: []types.Reservation{{Instances: []types.Instance{{
+		InstanceId: aws.String("i-other"), State: &types.InstanceState{Name: types.InstanceStateNameRunning},
+	}}}}}}
+	client := Client{Region: "ap-south-1", API: f}
+	if _, err := client.Describe(context.Background(), "", "i-other"); err == nil { t.Fatal("unmanaged instance must not be inspectable through managed-node route") }
+	if err := client.Action(context.Background(), "", "i-other", "stop"); err == nil { t.Fatal("unmanaged instance must not be controlled") }
+	if len(f.stopped) != 0 { t.Fatal("stop request was sent for an unmanaged instance") }
 }

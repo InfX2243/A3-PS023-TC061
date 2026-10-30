@@ -51,11 +51,9 @@ Install and configure Nginx using deploy/nginx/aiori-controller.conf, obtain a v
 
 ## 4. Onboard a worker
 
-1. Create a separate KVM-capable host. Verify test -c /dev/kvm, KVM permissions, CPU virtualization support, memory headroom, and the exact Cloud Hypervisor binary and guest image checksums.
-2. Install the worker agent as a separate systemd service. Configure its controller URL and the same VM_CONTROLLER_WORKER_SHARED_SECRET value used by the controller. Stage image artifacts locally and configure the worker's allowlist; do not accept arbitrary host paths from the UI.
-3. Ensure the worker can reach the controller's authenticated heartbeat endpoint over a private network or a tightly restricted TLS path. Restrict worker inbound traffic to the controller; do not expose the agent API publicly.
-4. Register the worker in the controller UI/API with a stable ID, display name, agent endpoint, and configured memory cap. The worker ID and configured memory cap must match the agent's heartbeat configuration.
-5. Confirm a recent heartbeat and healthy Cloud Hypervisor probe before scheduling VMs.
+For EC2-managed workers, configure the checksum-pinned bootstrap environment and IAM roles described in [EC2 inventory and bootstrap](./aws-ec2.md). Launch through `/aws`; cloud-init installs the worker agent, retrieves its shared secret from SSM, and starts the systemd service. The first authenticated heartbeat advertises the private endpoint and auto-enrolls the node in SQLite. Confirm a recent heartbeat and a healthy `/dev/kvm` + Cloud Hypervisor probe in Worker inventory before scheduling VMs.
+
+For an existing non-EC2 worker, the manual onboarding path remains available. Verify `/dev/kvm`, install the worker agent, configure the same worker shared secret, stage the allowlisted guest artifacts, ensure private controller-to-worker reachability, and register the stable ID, endpoint, and memory cap through the UI/API. Do not expose the worker API or Cloud Hypervisor socket publicly.
 
 ## 5. State semantics and cloud lifecycle
 

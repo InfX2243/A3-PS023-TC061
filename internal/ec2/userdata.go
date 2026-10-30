@@ -23,6 +23,7 @@ type BootstrapConfig struct {
 	DiskURL string
 	DiskSHA256 string
 	SecretParameter string
+	ControllerSecurityGroupID string
 	ImageID string
 	MemoryLimitMiB uint64
 	AgentPort int
@@ -43,6 +44,7 @@ func BootstrapConfigFromEnv() BootstrapConfig {
 		DiskURL: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_URL")),
 		DiskSHA256: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_DISK_SHA256")),
 		SecretParameter: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_SECRET_PARAMETER")),
+		ControllerSecurityGroupID: strings.TrimSpace(getenv("VM_CONTROLLER_SECURITY_GROUP_ID")),
 		ImageID: strings.TrimSpace(getenv("VM_CONTROLLER_WORKER_IMAGE_ID")),
 		MemoryLimitMiB: envUint64("VM_CONTROLLER_WORKER_MEMORY_LIMIT_MIB", 4096),
 		AgentPort: int(envUint64("VM_CONTROLLER_WORKER_AGENT_PORT", 9090)),
@@ -55,7 +57,7 @@ func (b BootstrapConfig) Enabled() bool {
 	return b.ControllerURL != "" && b.WorkerAgentURL != "" && b.WorkerAgentSHA256 != "" &&
 		b.CloudHypervisorURL != "" && b.CloudHypervisorSHA256 != "" &&
 		b.KernelURL != "" && b.KernelSHA256 != "" &&
-		b.DiskURL != "" && b.DiskSHA256 != "" && b.SecretParameter != "" && b.ImageID != ""
+		b.DiskURL != "" && b.DiskSHA256 != "" && b.SecretParameter != "" && b.ControllerSecurityGroupID != "" && b.ImageID != ""
 }
 
 func (b BootstrapConfig) BuildUserData() (string, error) {
@@ -78,6 +80,7 @@ func (b BootstrapConfig) BuildUserData() (string, error) {
 	} {
 		if !sha256Pattern.MatchString(sum) { return "", fmt.Errorf("%s SHA-256 must be 64 hexadecimal characters", name) }
 	}
+	if !validID(b.ControllerSecurityGroupID, "sg-") { return "", errors.New("VM_CONTROLLER_SECURITY_GROUP_ID must be a valid security group ID in the worker VPC") }
 	if !imageNamePattern.MatchString(b.ImageID) { return "", errors.New("worker image ID must be a safe identifier") }
 	if !strings.HasPrefix(b.SecretParameter, "/") || len(b.SecretParameter) > 1011 || strings.ContainsAny(b.SecretParameter, "\r\n") {
 		return "", errors.New("worker secret parameter must be an absolute SSM parameter path")

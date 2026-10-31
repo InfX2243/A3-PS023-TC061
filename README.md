@@ -45,3 +45,8 @@ Runtime secrets are read from environment variables, not JSON config:
 - `VM_CONTROLLER_WORKER_SHARED_SECRET`
 
 The operator token protects the UI and controller API; the worker shared secret protects heartbeats and controller-to-worker lifecycle calls. Configure trusted worker endpoints in the controller JSON before expecting placement to succeed. The worker agent requires `VM_CONTROLLER_WORKER_SHARED_SECRET` to authorize lifecycle requests. Start it with `go run ./cmd/worker-agent -config worker.example.json` after staging the configured Cloud Hypervisor binary and allowlisted image artifacts. Never expose the worker API or Cloud Hypervisor Unix socket publicly. Do not commit real credentials. Runtime database files under `data/` are ignored by Git.
+
+
+## Frontend controller simulation
+
+The browser-only controller experience is documented in [docs/frontend-controller-simulation.md](docs/frontend-controller-simulation.md). It explains the two-worker operator workflows, simulated placement and health rules, accessibility expectations, and the intended frontend-to-controller integration boundary. The interactive handbook is also available from the public frontend Documentation page.

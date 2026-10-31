@@ -1,0 +1,22 @@
+{
+  "worker_id": "worker-a",
+  "worker_name": "Worker A",
+  "listen_addr": "127.0.0.1:9090",
+  "runtime_dir": "/var/lib/vm-controller-worker/runtime",
+  "cloud_hypervisor_path": "/usr/local/bin/cloud-hypervisor",
+  "max_vcpus": 8,
+  "max_memory_bytes": 7516192768,
+  "request_timeout_ms": 2000,
+  "startup_timeout_ms": 5000,
+  "controller_heartbeat_url": "",
+  "worker_endpoint": "http://10.0.0.10:9090",
+  "heartbeat_interval_seconds": 10,
+  "images": [
+    {
+      "id": "ubuntu-demo",
+      "kernel_path": "/var/lib/vm-controller/images/vmlinuz",
+      "disk_path": "/var/lib/vm-controller/images/ubuntu-demo.img",
+      "cmdline": "console=ttyS0 root=/dev/vda1 rw"
+    }
+  ]
+}

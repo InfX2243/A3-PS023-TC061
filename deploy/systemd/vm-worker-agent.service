@@ -1,0 +1,34 @@
+[Unit]
+Description=AIORI VM Worker Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vm-controller-worker
+Group=vm-controller-worker
+SupplementaryGroups=kvm
+EnvironmentFile=/etc/vm-controller/worker.env
+WorkingDirectory=/var/lib/vm-controller-worker
+ExecStart=/usr/local/bin/vm-worker-agent -config /etc/vm-controller/worker.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=false
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+DeviceAllow=/dev/kvm rw
+ReadWritePaths=/var/lib/vm-controller-worker
+ReadOnlyPaths=/var/lib/vm-controller/images
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

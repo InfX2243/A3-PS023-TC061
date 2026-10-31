@@ -1,0 +1,39 @@
+name: Go verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+      - name: Format Go sources
+        run: gofmt -w $(git ls-files '*.go')
+      - name: Check whitespace errors
+        run: git diff --check
+      - name: Go version
+        run: go version
+      - name: Verify module files
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Build controller and worker
+        run: |
+          go build ./cmd/controller
+          go build ./cmd/worker-agent

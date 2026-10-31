@@ -85,7 +85,21 @@ function App(){
     {alerts.slice(0,4).map(a=><div className="activity" key={a.id}><span className={'activity-icon '+a.severity.toLowerCase()}>{a.severity==='Critical'?<AlertTriangle size={15}/>:<Activity size={15}/>}</span><div><b>{a.title}</b><small>{a.detail}</small></div><time>{ago(clock-a.created)}</time></div>)}
     {!alerts.length&&<div className="empty-state">No activity yet. Workspace events will appear here.</div>}
    </section>
-   <div className="dashboard-instances"><InstanceTable compact/></div>
+   <section className="card workload-card">
+    <div className="card-head"><div><h3>Workload status</h3><p>Current VM state across the cluster</p></div><button className="textbtn" onClick={()=>go('instances')}>Manage VMs <ArrowRight size={14}/></button></div>
+    <div className="workload-total"><b>{vms.length}</b><span>Total instances</span></div>
+    <div className="workload-bar" role="img" aria-label={running+' running, '+vms.filter(v=>v.status==='Stopped').length+' stopped, '+vms.filter(v=>v.status==='Unknown'||v.status==='Provisioning').length+' needing attention'}>
+     <i className="running" style={{width:(vms.length?running/vms.length*100:0)+'%'}}/>
+     <i className="stopped" style={{width:(vms.length?vms.filter(v=>v.status==='Stopped').length/vms.length*100:0)+'%'}}/>
+     <i className="attention" style={{width:(vms.length?vms.filter(v=>v.status==='Unknown'||v.status==='Provisioning').length/vms.length*100:0)+'%'}}/>
+    </div>
+    <div className="workload-legend">
+     <span><i className="running"/>Running <b>{running}</b></span>
+     <span><i className="stopped"/>Stopped <b>{vms.filter(v=>v.status==='Stopped').length}</b></span>
+     <span><i className="attention"/>Attention <b>{vms.filter(v=>v.status==='Unknown'||v.status==='Provisioning').length}</b></span>
+    </div>
+    <p className="workload-note">VM lifecycle operations and detailed allocations are available in the Virtual Machines workspace.</p>
+   </section>
   </div>
   <p className="disclaimer dashboard-disclaimer"><ShieldCheck size={14}/> Demonstration data only. Telemetry and operations are simulated in this browser; no physical hosts or cloud resources are queried.</p>
  </div>;

@@ -536,17 +536,25 @@ html:has(.docs-hero){scroll-behavior:smooth;scroll-padding-top:92px}
 .dashboard-activity .activity b{font-size:10px}
 .dashboard-activity .activity small{font-size:9px;line-height:1.55}
 .dashboard-activity .activity time{font-size:8px;white-space:nowrap}
-.dashboard-instances{min-width:0}
-.dashboard-instances .table-card{overflow:hidden}
-.dashboard-instances .table-card>.card-head{padding:19px 20px 15px;align-items:flex-start}
-.dashboard-instances .table-card>.card-head h3{font-size:13px}
-.dashboard-instances .table-card>.card-head p{font-size:9px;line-height:1.5}
-.dashboard-instances .table-card>.card-head .textbtn{font-size:10px;white-space:nowrap}
-.dashboard-instances .table-scroll{overflow-x:auto}
-.dashboard-instances table{min-width:470px}
-.dashboard-instances th{padding:11px 13px;font-size:8px}
-.dashboard-instances td{padding:12px 13px;font-size:9px}
-.dashboard-instances td small{font-size:8px}
+.workload-card{min-width:0;padding:21px 22px}
+.workload-card>.card-head{align-items:flex-start}
+.workload-card .card-head .textbtn{font-size:10px;white-space:nowrap}
+.workload-total{display:flex;align-items:baseline;gap:9px;margin:19px 0 13px}
+.workload-total b{color:#f0f3fa;font:750 34px Manrope;letter-spacing:-1.5px;font-variant-numeric:tabular-nums}
+.workload-total span{color:#9eacc1;font-size:10px}
+.workload-bar{display:flex;width:100%;height:9px;overflow:hidden;gap:3px;border-radius:8px;background:#27364d}
+.workload-bar i{display:block;min-width:0;border-radius:5px;transition:width .25s ease}
+.workload-bar i.running{background:#43c6a1}
+.workload-bar i.stopped{background:#7585a3}
+.workload-bar i.attention{background:#e2ad68}
+.workload-legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:17px}
+.workload-legend>span{display:grid;grid-template-columns:8px 1fr;align-items:center;gap:6px;color:#a8b5c9;font-size:9px;min-width:0}
+.workload-legend>span>i{width:7px;height:7px;border-radius:50%}
+.workload-legend>span>i.running{background:#43c6a1}
+.workload-legend>span>i.stopped{background:#7585a3}
+.workload-legend>span>i.attention{background:#e2ad68}
+.workload-legend b{grid-column:2;color:#e6edf8;font:650 13px Manrope}
+.workload-note{margin:17px 0 0;padding-top:13px;border-top:1px solid #2a3a52;color:#8f9fb7;font-size:9px;line-height:1.7}
 .dashboard-disclaimer{display:flex;align-items:center;gap:7px;margin:16px 0 0;color:#8f9fb7;font-size:9px}
 .dashboard-disclaimer svg{flex:0 0 auto;color:#9aaeff}
 @media(max-width:1180px){

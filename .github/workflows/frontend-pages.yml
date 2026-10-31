@@ -3,7 +3,8 @@ name: Build and publish frontend to gh-pages
 on:
   push:
     branches:
-      - feat/frontend-static-simulation\n      - feat/frontend-product-experience
+      - feat/frontend-static-simulation
+      - feat/frontend-product-experience
     paths:
       - "frontend/**"
       - ".github/workflows/frontend-pages.yml"

@@ -27,7 +27,6 @@ type MetricCardProps = {
   unit?: string;
   change: string;
   icon: LucideIcon;
-  positive?: boolean;
 };
 
 export function MetricCard({
@@ -36,7 +35,6 @@ export function MetricCard({
   unit,
   change,
   icon: Icon,
-  positive = true,
 }: MetricCardProps) {
   return (
     <article className="metric card">
@@ -49,7 +47,7 @@ export function MetricCard({
         {unit && <small>{unit}</small>}
       </div>
       <div className="metric-foot">
-        <span className={positive ? 'positive' : 'muted'}>
+        <span className="metric-change">
           {change}
         </span>
       </div>

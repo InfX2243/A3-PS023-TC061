@@ -1,37 +1,52 @@
-name: Deploy frontend simulation to GitHub Pages
+name: Build and publish frontend to gh-pages
+
 on:
   push:
-    branches: [feat/frontend-static-simulation]
-    paths: ['frontend/**', '.github/workflows/frontend-pages.yml']
+    branches:
+      - feat/frontend-static-simulation
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-pages.yml"
   workflow_dispatch:
+
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
+
 concurrency:
-  group: pages
+  group: frontend-gh-pages
   cancel-in-progress: true
+
 jobs:
-  build:
+  build-and-deploy:
+    name: Build React app and publish static site
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout frontend source
+        uses: actions/checkout@v4
+        with:
+          ref: feat/frontend-static-simulation
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+          cache: npm
+          cache-dependency-path: frontend/package.json
+
+      - name: Install dependencies
         working-directory: frontend
-      - run: npm run build
+        run: npm install
+
+      - name: Type-check and build
         working-directory: frontend
-      - uses: actions/upload-pages-artifact@v3
+        run: npm run build
+
+      - name: Publish dist to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: frontend/dist
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: frontend/dist
+          force_orphan: true
+          enable_jekyll: false
+          commit_message: "Deploy frontend from ${{ github.sha }}"

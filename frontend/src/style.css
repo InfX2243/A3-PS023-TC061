@@ -70,3 +70,58 @@
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
 .status.unknown{background:#3b3a32;color:#f1d89b}.status.unknown i{background:#f1d89b}.node-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.node-detail-grid .node-checks{min-width:0}@media(max-width:850px){.node-detail-grid{grid-template-columns:1fr}}
+
+/* Product polish: clearer hierarchy, less density, consistent interaction patterns */
+:root{--surface:#101a2a;--surface-raised:#142137;--line:#2a3850;--text:#e8edf7;--muted:#9aa8bf;--accent:#91a0ff}
+button,input,select{font:inherit}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #a8b4ff;outline-offset:3px}
+.content{max-width:1440px;padding:clamp(22px,3vw,42px)}
+.page-head{align-items:flex-end;margin-bottom:30px;gap:24px}
+.page-head h1{font-size:clamp(25px,2.2vw,32px);letter-spacing:-1px;margin:9px 0 7px}
+.page-head p{font-size:13px;line-height:1.65;max-width:680px;color:#a5b1c6}
+.eyebrow{letter-spacing:1.2px;font-size:10px}
+.card{border-radius:13px;border-color:#293850;box-shadow:0 8px 28px #00000012}
+.metric-grid{gap:16px;margin-bottom:22px}
+.metric{padding:21px 22px;min-height:132px}
+.metric-top{font-size:12px;color:#aab6ca}
+.metric-value{font-size:32px;margin:19px 0 10px}
+.metric-foot{font-size:11px}
+.overview-metrics{grid-template-columns:repeat(3,minmax(0,1fr));max-width:960px}
+.overview-grid{grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:18px;margin-bottom:18px;align-items:stretch}
+.overview-grid>.chart-card,.overview-grid>.health-card{min-width:0;padding:23px}
+.overview-grid .chart-area{height:230px;margin-top:22px}
+.overview-grid .card-head h3,.activity-card .card-head h3{font-size:15px}
+.overview-grid .card-head p,.activity-card .card-head p{font-size:11px}
+.health-card>.card-head{margin-bottom:20px}
+.worker{padding:16px 0;gap:13px}
+.worker-icon{width:38px;height:38px}
+.worker-info b{font-size:12px}
+.worker-info small{font-size:10px}
+.worker-load{font-size:11px}
+.health-card>.textbtn{margin-top:17px;font-size:11px}
+.overview-activity{padding:22px 24px}
+.overview-activity .activity{padding:14px 0}
+.overview-activity .activity b{font-size:11px}
+.overview-activity .activity small{font-size:10px}
+.dashboard-grid,.lower-grid{gap:18px}
+.table-card>.card-head{padding:21px 23px}
+th{padding:14px 17px;font-size:10px}
+td{padding:15px 17px;font-size:11px}
+.btn{min-height:40px;border-radius:9px;padding:10px 16px;font-size:12px}
+.btn.primary{background:linear-gradient(135deg,#7788f6,#6879e8);box-shadow:0 5px 16px #6578ed22}
+.btn.secondary{background:#172338;border-color:#34435c}
+.navitem{height:42px;font-size:12px}
+.topbar{padding-inline:clamp(18px,3vw,38px)}
+.searchbox{height:38px}
+.searchbox input{font-size:11px}
+.sidebar{padding:25px 16px}
+.workspace{margin-bottom:25px;padding:13px}
+.card-head{gap:18px}
+.activity-card{padding:22px}
+.node-card,.node-checks{border-radius:13px}
+.disclaimer{font-size:11px;line-height:1.7;color:#9aa8bf}
+.empty-state{padding:36px;text-align:center;color:#9aa8bf}
+@media(max-width:1100px){.overview-grid{grid-template-columns:minmax(0,1fr)}.overview-metrics{max-width:none}.content{padding:25px}}
+@media(max-width:760px){.content{padding:22px 16px}.page-head{align-items:flex-start;flex-direction:column;margin-bottom:22px}.page-head>.btn,.page-head>.live-pill{align-self:flex-start}.overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.metric{padding:16px;min-height:118px}.metric-value{font-size:27px;margin:14px 0 8px}.overview-grid>.chart-card,.overview-grid>.health-card{padding:18px}.overview-grid .chart-area{height:190px}.overview-activity{padding:18px}.overview-activity .activity{align-items:flex-start}.overview-activity .activity time{white-space:nowrap}.topbar{height:60px;padding:0 14px}.crumb{font-size:10px}.top-actions{gap:10px}.searchbox{max-width:40vw}.searchbox input{width:100%;min-width:0}.searchbox kbd{display:none}}
+@media(max-width:420px){.overview-metrics{grid-template-columns:1fr}.metric{min-height:100px}.topbar .crumb{max-width:42vw;overflow:hidden;white-space:nowrap}.top-actions{gap:7px}.searchbox{max-width:36vw;padding:0 7px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}

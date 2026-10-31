@@ -173,6 +173,7 @@ func heartbeatLoop(ctx context.Context, cfg fileConfig, secret string) {
 		if err != nil { slog.Warn("build worker heartbeat", "error", err); return }
 		req.Header.Set("Authorization", "Bearer "+secret)
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("ngrok-skip-browser-warning", "true")
 		resp, err := client.Do(req)
 		if err != nil { slog.Warn("send worker heartbeat failed", "worker_id", cfg.WorkerID, "error", err); return }
 		_ = resp.Body.Close()

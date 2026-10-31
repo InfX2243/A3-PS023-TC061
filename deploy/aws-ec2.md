@@ -1,8 +1,8 @@
 # EC2 inventory, worker bootstrap, and lifecycle operations
 
-The authenticated controller console at `/aws` now lists every EC2 instance tagged `ManagedBy=aiori-controller` in the selected region, with AWS lifecycle state, instance type, IDs, IP addresses, placement, AMI, key pair, VPC/subnet, and security groups. The inventory refreshes automatically; instance details include AWS Console navigation and an Ubuntu SSH command when a public IP and key pair are present. Start/stop actions are explicit, and termination is available only through a separate irreversible confirmation. All lifecycle actions re-check the controller management tag before calling AWS.
+The authenticated controller console at `/aws` lists every EC2 instance tagged `ManagedBy=aiori-controller` in the selected region. Select an instance to open its dedicated AWS-style detail page with lifecycle, networking, AMI, placement, security-group, and worker-agent information. The detail page plots CPU, memory, root-disk utilization, and network counters directly in Aiori; it does not query CloudWatch. Start/stop actions are explicit, and termination is available only through a separate irreversible confirmation. All lifecycle actions re-check the controller management tag before calling AWS.
 
-The controller uses the AWS SDK for Go v2. The AWS CLI is not required on the controller. The worker bootstrap installs AWS CLI on the worker only to retrieve its SecureString bootstrap secret through the worker's instance role.
+The controller uses the AWS SDK for Go v2. The AWS CLI is not required on the controller. The worker bootstrap installs AWS CLI on the worker only to retrieve its SecureString bootstrap secret through the worker's instance role. A small Python collector (not the CloudWatch Agent) reads Linux /proc, df, and interface counters every 60 seconds and sends authenticated samples to the controller. The controller keeps the latest 24 hours / 1,440 samples per instance in memory; a controller restart clears this telemetry history.
 
 ## 1. Controller AWS permissions and region
 
@@ -19,6 +19,20 @@ Restrict these permissions to the intended account, region, AMIs, subnet/securit
 
 ## 2. Automatic worker bootstrap configuration
 
+**Worker user data is mandatory for launches from the `/aws` console.** The controller now builds and validates the complete cloud-init script before invoking EC2 `RunInstances`. If any required bootstrap setting is missing or invalid, or if the worker instance profile is absent, the request is rejected and AWS is never called. There is no longer a successful EC2-only fallback from this page. The launch button is also disabled in the UI until the configuration is valid; the server-side check remains authoritative.
+
+Configure these values in the controller process environment (or its `.env`) and restart it:
+
+- `VM_CONTROLLER_PUBLIC_URL`: public HTTPS controller origin; use the current ngrok HTTPS origin for local testing
+- `VM_CONTROLLER_WORKER_AGENT_URL` and `VM_CONTROLLER_WORKER_AGENT_SHA256`
+- `VM_CONTROLLER_CLOUD_HYPERVISOR_URL` and `VM_CONTROLLER_CLOUD_HYPERVISOR_SHA256`
+- `VM_CONTROLLER_WORKER_DISK_URL` and `VM_CONTROLLER_WORKER_DISK_SHA256`
+- `VM_CONTROLLER_WORKER_SECRET_PARAMETER`: SSM SecureString parameter name
+- `VM_CONTROLLER_WORKER_IMAGE_ID`: image ID written into the worker agent config
+- `VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE`: instance profile name with permission to read only that SSM parameter
+
+Artifact URLs must be reachable by the instance over HTTPS and their SHA-256 checksums must match the downloaded files. Do not use placeholder URLs/checksums in a real launch. For ngrok, restart the controller after changing the public URL and create a new instance; user data is fixed at launch time.
+
 The UI shows a generated user-data preview when all bootstrap settings are present. The launch payload is a cloud-init script that:
 
 1. Installs the worker's bootstrap dependencies.
@@ -28,6 +42,7 @@ The UI shows a generated user-data preview when all bootstrap settings are prese
 5. Retrieves the worker shared secret from SSM Parameter Store as a SecureString using the instance profile; the secret value is not embedded in user data.
 6. Writes a restricted worker config and environment file, installs a systemd service, and starts the agent.
 7. Sends authenticated heartbeats to the controller. On first heartbeat, the controller durably enrolls the node using its EC2 instance ID and private agent endpoint.
+8. Starts `aiori-metrics-collector.service`, which sends CPU, memory, root filesystem utilization, and network byte counters to `POST /api/v1/worker/metrics` using the same worker secret. The console reads these samples through the authenticated session route and draws the charts locally.
 
 Set these values in the controller's protected environment (see `.env.example` for the complete variable list):
 
@@ -59,6 +74,15 @@ The controller and worker must be in the same VPC for the automatic security-gro
 The worker sends heartbeat traffic outbound to `VM_CONTROLLER_PUBLIC_URL`. The controller calls the worker's private IP endpoint over the VPC. Select a worker subnet and security group in the controller VPC. If the controller security group is in a different VPC, launch/bootstrap will fail to configure the source-group rule; do not bypass this by opening the worker API publicly.
 
 The current worker-agent HTTP API uses bearer authentication over the private VPC path; it is not independently TLS-terminated. Keep that path inside a trusted private network and do not route it over the public internet. A production deployment should add mutual TLS or a private encrypted overlay before using untrusted network paths.
+
+
+## 3. Local testing through ngrok
+
+For local development, run the controller on `127.0.0.1:8080` and expose that port with an HTTPS ngrok URL. Set `VM_CONTROLLER_PUBLIC_URL` to the exact public HTTPS origin (for example `https://your-name.ngrok-free.app`) before starting the controller. For telemetry-only local testing, leave `VM_CONTROLLER_SECURITY_GROUP_ID` unset; the bootstrap still installs the collector and does not try to create a controller-to-worker security-group rule. Keep the worker instance profile and its narrowly scoped `ssm:GetParameter` permission configured. Keep the URL current whenever ngrok assigns a new hostname, then restart the controller and launch a new EC2 instance so its user data contains the current URL. Existing instances do not receive updated user data when the environment changes.
+
+The worker collector and heartbeat make outbound HTTPS requests, so this setup supports telemetry uploads without exposing your laptop or worker-agent port. This is why the controller security-group ID is optional in telemetry-only mode. The instance detail page can therefore display telemetry while the controller is running locally behind ngrok. Important limitation: the existing worker lifecycle API also expects the controller to reach the worker-agent's private endpoint. A laptop reached through ngrok is not inside the EC2 VPC, so this local arrangement does not make private worker-agent RPC reachable. For VM start/stop orchestration, run the controller in the same VPC or establish a private network overlay; do not open port 9090 to the public internet.
+
+Check `/var/log/aiori-worker-bootstrap.log` and `systemctl status aiori-worker-agent aiori-metrics-collector` on the instance if no metrics arrive. The first sample is sent after the collector's initial 60-second interval.
 
 ## 4. Inventory and health semantics
 
@@ -92,4 +116,4 @@ go test ./...
 go run ./cmd/controller -config config.example.json
 ```
 
-Unit tests use a narrow EC2 API fake and do not make live AWS calls. A real launch incurs AWS charges and requires valid IAM permissions, a compatible Linux AMI, an instance profile, artifact URLs/checksums, SSM parameter, and same-VPC security groups. Cloud-init logs are written to `/var/log/aiori-worker-bootstrap.log` on the worker; inspect them through your approved SSH access path when bootstrap does not complete.
+Unit tests use a narrow EC2 API fake and do not make live AWS calls. A real launch incurs AWS charges and requires valid IAM permissions, a compatible Linux AMI, an instance profile, artifact URLs/checksums, SSM parameter, and same-VPC security groups. Cloud-init logs are written to `/var/log/aiori-worker-bootstrap.log` on the worker; inspect them through your approved SSH access path when bootstrap does not complete. Collector service output is available through `journalctl -u aiori-metrics-collector`.

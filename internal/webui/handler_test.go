@@ -694,3 +694,102 @@ func TestPrepareVMPageUsesFixedNavigationAndLiveConfigurationPreview(t *testing.
   if !strings.Contains(jsResponse.Body.String(), "initPrepareVMInteractions") { t.Fatal("prepare VM interactions were not served") }
   _ = h
 }
+
+
+type fakeEC2Provisioner struct {
+	launchCalls int
+	lastLaunch ec2.LaunchInput
+}
+func (f *fakeEC2Provisioner) Launch(_ context.Context, in ec2.LaunchInput) (ec2.Instance, error) {
+	f.launchCalls++
+	f.lastLaunch = in
+	return ec2.Instance{ID:"i-bootstrap123", Name:in.Name, SecurityGroups:in.SecurityGroupIDs}, nil
+}
+func (f *fakeEC2Provisioner) Describe(context.Context, string, string) (ec2.Instance, error) {
+	return ec2.Instance{}, errors.New("not used in launch test")
+}
+func (f *fakeEC2Provisioner) Action(context.Context, string, string, string) error { return nil }
+
+func validWebBootstrapConfig() ec2.BootstrapConfig {
+	return ec2.BootstrapConfig{
+		ControllerURL:"https://controller.example.test",
+		WorkerAgentURL:"https://artifacts.example.test/worker-agent",
+		WorkerAgentSHA256:strings.Repeat("a",64),
+		CloudHypervisorURL:"https://artifacts.example.test/cloud-hypervisor",
+		CloudHypervisorSHA256:strings.Repeat("b",64),
+		DiskURL:"https://artifacts.example.test/worker.img",
+		DiskSHA256:strings.Repeat("d",64),
+		SecretParameter:"/aiori/worker/shared-secret",
+		ImageID:"ubuntu-worker",
+		MemoryLimitMiB:4096,
+		AgentPort:9090,
+	}
+}
+
+func authenticatedEC2LaunchRequest(t *testing.T, h *Handler, handler http.Handler) *httptest.ResponseRecorder {
+	t.Helper()
+	login := httptest.NewRequest(http.MethodPost,"/login",strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type","application/x-www-form-urlencoded")
+	loginResponse:=httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse,login)
+	if loginResponse.Code!=http.StatusSeeOther { t.Fatalf("login status=%d",loginResponse.Code) }
+	cookie:=loginResponse.Result().Cookies()[0]
+	csrfRequest:=httptest.NewRequest(http.MethodGet,"/aws",nil)
+	csrfRequest.AddCookie(cookie)
+	values:=url.Values{
+		"csrf_token":{h.csrfToken(csrfRequest)},
+		"client_token":{"form-token-123456"},
+		"name":{"aiori-worker-test"},
+		"region":{"ap-south-1"},
+		"controller_url":{"https://controller.example.test"},
+		"image_id":{"ami-0123456789abcdef0"},
+		"instance_type":{"c8i.xlarge"},
+		"instance_profile":{"aiori-worker-ssm"},
+	}
+	request:=httptest.NewRequest(http.MethodPost,"/aws/instances",strings.NewReader(values.Encode()))
+	request.Header.Set("Content-Type","application/x-www-form-urlencoded")
+	request.AddCookie(cookie)
+	response:=httptest.NewRecorder()
+	handler.ServeHTTP(response,request)
+	return response
+}
+
+func TestEC2LaunchCanProvisionInstanceWithoutWorkerBootstrap(t *testing.T) {
+	h:=NewHandler(&fakeUIService{},"operator-secret",Limits{},false)
+	provider:=&fakeEC2Provisioner{}
+	h.SetEC2Provisioner(provider)
+	mux:=http.NewServeMux(); h.Register(mux)
+	response:=authenticatedEC2LaunchRequest(t,h,mux)
+	if response.Code!=http.StatusSeeOther { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
+	if provider.launchCalls!=1 { t.Fatalf("AWS launch called %d times without bootstrap, want 1",provider.launchCalls) }
+	if provider.lastLaunch.UserData!="" { t.Fatal("unconfigured bootstrap must not send partial user data") }
+	if !strings.Contains(response.Header().Get("Location"),"will+NOT+enroll") { t.Fatalf("redirect did not disclose that this is EC2-only: %s",response.Header().Get("Location")) }
+}
+
+func TestEC2LaunchAlwaysPassesGeneratedUserDataToAWS(t *testing.T) {
+	h:=NewHandler(&fakeUIService{},"operator-secret",Limits{},false)
+	provider:=&fakeEC2Provisioner{}
+	h.SetEC2Provisioner(provider)
+	h.SetEC2Bootstrap(validWebBootstrapConfig())
+	mux:=http.NewServeMux(); h.Register(mux)
+	response:=authenticatedEC2LaunchRequest(t,h,mux)
+	if response.Code!=http.StatusSeeOther { t.Fatalf("status=%d body=%s",response.Code,response.Body.String()) }
+	if provider.launchCalls!=1 { t.Fatalf("AWS launch calls=%d, want 1",provider.launchCalls) }
+	if !strings.HasPrefix(provider.lastLaunch.UserData,"#!/bin/bash") { t.Fatal("AWS RunInstances input did not contain generated cloud-init user data") }
+	if provider.lastLaunch.InstanceProfile!="aiori-worker-ssm" { t.Fatalf("instance profile=%q",provider.lastLaunch.InstanceProfile) }
+	if !strings.Contains(response.Header().Get("Location"),"/aws/instances/i-bootstrap123") { t.Fatalf("launch did not redirect to instance detail page: %s",response.Header().Get("Location")) }
+}
+
+func TestAWSPageAllowsEC2LaunchAndExplainsMissingWorkerBootstrap(t *testing.T) {
+	h:=NewHandler(&fakeUIService{},"operator-secret",Limits{},false)
+	provider:=&fakeEC2Provisioner{}
+	h.SetEC2Provisioner(provider)
+	mux:=http.NewServeMux(); h.Register(mux)
+	login:=httptest.NewRequest(http.MethodPost,"/login",strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type","application/x-www-form-urlencoded")
+	loginResponse:=httptest.NewRecorder(); mux.ServeHTTP(loginResponse,login)
+	request:=httptest.NewRequest(http.MethodGet,"/aws",nil); request.AddCookie(loginResponse.Result().Cookies()[0])
+	response:=httptest.NewRecorder(); mux.ServeHTTP(response,request)
+	if response.Code!=http.StatusOK { t.Fatalf("status=%d",response.Code) }
+	if !strings.Contains(response.Body.String(),"Launch EC2 instance (no worker agent)") { t.Fatal("AWS page did not offer EC2-only provisioning") }; if strings.Contains(response.Body.String(),`type="submit" disabled`) { t.Fatal("EC2 launch button must not be disabled when bootstrap is absent") }
+}

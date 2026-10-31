@@ -16,6 +16,7 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
 	"github.com/InfX2243/A3-PS023-TC061/internal/store"
 	"github.com/InfX2243/A3-PS023-TC061/internal/workerhealth"
+	"github.com/InfX2243/A3-PS023-TC061/internal/observability"
 	"github.com/InfX2243/A3-PS023-TC061/internal/webui"
 )
 
@@ -72,6 +73,9 @@ func main() {
 	if awsRegion == "" { awsRegion = os.Getenv("AWS_DEFAULT_REGION") }
 	ui.SetEC2Provisioner(ec2.Client{Region: awsRegion})
 	ui.SetEC2Bootstrap(ec2.BootstrapConfigFromEnv())
+	metricsStore := observability.NewStore()
+	ui.SetMetricsStore(metricsStore)
+	observability.Handler{Store: metricsStore, WorkerSecret: cfg.WorkerSharedSecret, OperatorToken: cfg.OperatorToken}.Register(mux)
 	ui.Register(mux)
 	registry := workerhealth.NewRegistry(workerhealth.DefaultStaleAfter)
 	workerhealth.NewHandlerWithRecorder(registry, cfg.WorkerSharedSecret, cfg.OperatorToken, service).RegisterHeartbeatOnly(mux)

@@ -2,6 +2,7 @@ package webui
 
 import (
 	"context"
+	"encoding/json"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -19,6 +20,7 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/controllerapi"
 	"github.com/InfX2243/A3-PS023-TC061/internal/domain"
 	"github.com/InfX2243/A3-PS023-TC061/internal/ec2"
+	"github.com/InfX2243/A3-PS023-TC061/internal/observability"
 )
 
 type Service interface {
@@ -45,6 +47,7 @@ type Handler struct {
 	secureCookie bool
 	ec2Client ec2Provisioner
 	ec2Bootstrap ec2.BootstrapConfig
+	metricsStore interface { List(string, time.Time) []observability.Sample }
 	templates *template.Template
 }
 
@@ -83,6 +86,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workers", h.workersPage)
 	mux.HandleFunc("GET /vms", h.vmInventoryPage)
 	mux.HandleFunc("GET /aws", h.awsPage)
+	mux.HandleFunc("GET /aws/instances/{instanceID}", h.ec2InstancePage)
+	mux.HandleFunc("GET /aws/instances/{instanceID}/metrics", h.instanceMetrics)
 	mux.HandleFunc("POST /aws/instances", h.launchEC2)
 	mux.HandleFunc("POST /aws/instances/{instanceID}/{action}", h.ec2Action)
 	mux.HandleFunc("POST /workers", h.registerWorker)
@@ -161,15 +166,38 @@ func (h *Handler) dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SetEC2Provisioner(client ec2Provisioner) { h.ec2Client = client }
 func (h *Handler) SetEC2Bootstrap(config ec2.BootstrapConfig) { h.ec2Bootstrap = config }
+func (h *Handler) SetMetricsStore(store interface { List(string, time.Time) []observability.Sample }) { h.metricsStore = store }
+
+func (h *Handler) instanceMetrics(w http.ResponseWriter, r *http.Request) {
+	h.headers(w)
+	if !h.authenticated(r) { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
+	id := r.PathValue("instanceID")
+	if h.ec2Client == nil || h.metricsStore == nil { http.Error(w, "metrics are unavailable", http.StatusServiceUnavailable); return }
+	if _, err := h.ec2Client.Describe(r.Context(), r.URL.Query().Get("region"), id); err != nil { http.Error(w, "instance not found", http.StatusNotFound); return }
+	var since time.Time
+	if raw := r.URL.Query().Get("since"); raw != "" { parsed, err := time.Parse(time.RFC3339, raw); if err != nil { http.Error(w, "invalid since parameter", http.StatusBadRequest); return }; since = parsed }
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"instance_id": id, "samples": h.metricsStore.List(id, since)})
+}
 type ec2InventoryRow struct { Instance ec2.Instance; Worker domain.Worker; HasWorker bool }
-type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string }
+type awsPageData struct { Instance ec2.Instance; HasInstance bool; Agent domain.Worker; HasAgent bool; Instances []ec2InventoryRow; InventoryError string; BootstrapEnabled bool; UserData string; Region, Error, Notice, CSRFToken, IdempotencyKey string; DefaultAMI, DefaultSubnet, DefaultWorkerSecurityGroup, DefaultWorkerInstanceProfile, ControllerURL string }
+
+func (h *Handler) ec2InstancePage(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	query.Set("instance_id", r.PathValue("instanceID"))
+	clone := r.Clone(r.Context())
+	clone.URL = new(url.URL)
+	*clone.URL = *r.URL
+	clone.URL.RawQuery = query.Encode()
+	h.awsPage(w, clone)
+}
 
 func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
 	region := r.URL.Query().Get("region")
 	if region == "" { region = os.Getenv("AWS_REGION"); if region == "" { region = os.Getenv("AWS_DEFAULT_REGION") } }
-	data := awsPageData{Region: region, Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled()}
+	data := awsPageData{Region: region, DefaultAMI: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_AMI_ID"), DefaultSubnet: os.Getenv("VM_CONTROLLER_DEFAULT_SUBNET_ID"), DefaultWorkerSecurityGroup: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_SECURITY_GROUP_ID"), DefaultWorkerInstanceProfile: os.Getenv("VM_CONTROLLER_DEFAULT_WORKER_INSTANCE_PROFILE"), Notice: r.URL.Query().Get("notice"), Error: r.URL.Query().Get("error"), CSRFToken: h.csrfToken(r), IdempotencyKey: newFormID(), Instances: []ec2InventoryRow{}, BootstrapEnabled: h.ec2Bootstrap.Enabled(), ControllerURL: h.ec2Bootstrap.ControllerURL}
 	workersByID := make(map[string]domain.Worker)
 	if h.service != nil {
 		workers, err := h.service.ListWorkers(r.Context())
@@ -199,32 +227,85 @@ func (h *Handler) awsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if data.BootstrapEnabled {
 		bootstrap := h.ec2Bootstrap
+		bootstrap.ControllerURL = data.ControllerURL
 		bootstrap.NodeName = strings.TrimSpace(r.URL.Query().Get("name"))
 		if data.HasInstance && data.Instance.Name != "" { bootstrap.NodeName = data.Instance.Name }
 		if bootstrap.NodeName == "" { bootstrap.NodeName = "aiori-worker-test" }
-		if script, err := bootstrap.BuildUserData(); err == nil { data.UserData = script } else { data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error() }
+		if bootstrap.ControllerURL == "" {
+			data.InventoryError = "Enter your current ngrok HTTPS URL in the Controller public URL field before launching."
+		} else if script, err := bootstrap.BuildUserData(); err == nil {
+			data.UserData = script
+		} else {
+			data.BootstrapEnabled = false
+			data.InventoryError = "Worker bootstrap configuration is invalid: " + err.Error()
+		}
+	} else {
+		data.InventoryError = "Worker bootstrap is not configured. Configure verified worker artifacts/checksums and the worker image ID on the controller; enter the ngrok URL in this form."
 	}
 	h.render(w, "aws", data)
 }
-func (h *Handler) launchEC2(w http.ResponseWriter,r *http.Request) {
- h.headers(w); if !h.authenticated(r) { http.Redirect(w,r,"/login",http.StatusSeeOther); return }
- r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token or form",http.StatusForbidden); return }
- if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
- if !safeFormID(r.FormValue("client_token")) { http.Error(w,"invalid launch token; reload the form",http.StatusBadRequest); return }
- groups:=strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"),","," "))
- in:=ec2.LaunchInput{Name:strings.TrimSpace(r.FormValue("name")),Region:strings.TrimSpace(r.FormValue("region")),ImageID:strings.TrimSpace(r.FormValue("image_id")),InstanceType:r.FormValue("instance_type"),SubnetID:strings.TrimSpace(r.FormValue("subnet_id")),SecurityGroupIDs:groups,KeyName:strings.TrimSpace(r.FormValue("key_name")),InstanceProfile:strings.TrimSpace(r.FormValue("instance_profile")),ClientToken:r.FormValue("client_token")}
- if h.ec2Bootstrap.Enabled() { if in.InstanceProfile == "" { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap requires an EC2 instance profile with ssm:GetParameter permission for the configured SecureString parameter.")+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; bootstrap := h.ec2Bootstrap; bootstrap.NodeName = in.Name; userData, err := bootstrap.BuildUserData(); if err != nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape("Worker bootstrap configuration is invalid: "+err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }; in.UserData = userData }
- instance,err:=h.ec2Client.Launch(r.Context(),in); if err!=nil { http.Redirect(w,r,"/aws?error="+url.QueryEscape(err.Error())+"&region="+url.QueryEscape(in.Region),http.StatusSeeOther); return }
- notice := "EC2 launch accepted without worker-agent bootstrap; this instance is not an enrolled worker."
- if h.ec2Bootstrap.Enabled() {
-   ingress, ok := h.ec2Client.(ec2IngressProvisioner)
-   if !ok { http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched, but the provider cannot configure private worker-agent ingress."),http.StatusSeeOther); return }
-   if err := ingress.AllowControllerIngress(r.Context(), in.Region, instance.SecurityGroups, h.ec2Bootstrap.ControllerSecurityGroupID, h.ec2Bootstrap.AgentPort); err != nil {
-     http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&error="+url.QueryEscape("Instance launched with user data, but controller-to-worker network access could not be configured: "+err.Error()),http.StatusSeeOther); return
-   }
-   notice = "EC2 launch accepted with checksum-verified worker bootstrap and private controller-only agent ingress. Wait for cloud-init and the first authenticated heartbeat; agent health is shown separately in Worker inventory."
- }
- http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(instance.ID)+"&region="+url.QueryEscape(in.Region)+"&notice="+url.QueryEscape(notice)+"&name="+url.QueryEscape(in.Name),http.StatusSeeOther)
+func (h *Handler) launchEC2(w http.ResponseWriter, r *http.Request) {
+	h.headers(w)
+	if !h.authenticated(r) { http.Redirect(w, r, "/login", http.StatusSeeOther); return }
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	if err := r.ParseForm(); err != nil || !h.verifyCSRF(r) { http.Error(w, "invalid request token or form", http.StatusForbidden); return }
+	if h.ec2Client == nil { http.Error(w, "EC2 provisioning unavailable", http.StatusServiceUnavailable); return }
+	if !safeFormID(r.FormValue("client_token")) { http.Error(w, "invalid launch token; reload the form", http.StatusBadRequest); return }
+
+	region := strings.TrimSpace(r.FormValue("region"))
+	fail := func(message string) {
+		http.Redirect(w, r, "/aws?error="+url.QueryEscape(message)+"&region="+url.QueryEscape(region), http.StatusSeeOther)
+	}
+	groups := strings.Fields(strings.ReplaceAll(r.FormValue("security_group_ids"), ",", " "))
+	in := ec2.LaunchInput{
+		Name: strings.TrimSpace(r.FormValue("name")), Region: region,
+		ImageID: strings.TrimSpace(r.FormValue("image_id")), InstanceType: r.FormValue("instance_type"),
+		SubnetID: strings.TrimSpace(r.FormValue("subnet_id")), SecurityGroupIDs: groups,
+		KeyName: strings.TrimSpace(r.FormValue("key_name")),
+		InstanceProfile: strings.TrimSpace(r.FormValue("instance_profile")),
+		ClientToken: r.FormValue("client_token"),
+	}
+	bootstrap := h.ec2Bootstrap
+	bootstrap.NodeName = in.Name
+	bootstrap.ControllerURL = strings.TrimRight(strings.TrimSpace(r.FormValue("controller_url")), "/")
+	if bootstrap.Enabled() {
+		if in.InstanceProfile == "" {
+			fail("Worker bootstrap is configured, but the worker IAM instance profile is missing. It must grant ssm:GetParameter for the configured worker secret.")
+			return
+		}
+		userData, err := bootstrap.BuildUserData()
+		if err != nil {
+			fail("EC2 worker bootstrap configuration is invalid: " + err.Error())
+			return
+		}
+		if strings.TrimSpace(userData) == "" || !strings.HasPrefix(userData, "#!/bin/bash") {
+			http.Error(w, "EC2 worker bootstrap generated invalid user data", http.StatusInternalServerError)
+			return
+		}
+		in.UserData = userData
+	}
+	instance, err := h.ec2Client.Launch(r.Context(), in)
+	if err != nil { fail(err.Error()); return }
+
+	notice := "EC2 instance launch accepted. This instance was launched without worker-agent bootstrap and will NOT enroll as a compute node. Configure worker bootstrap before using it for workloads."
+	if bootstrap.Enabled() {
+		notice = "EC2 launch accepted with worker-agent bootstrap. Wait for cloud-init and the first authenticated heartbeat; confirm enrollment in Worker inventory."
+	}
+	if bootstrap.Enabled() && bootstrap.ControllerSecurityGroupID != "" {
+		ingress, ok := h.ec2Client.(ec2IngressProvisioner)
+		if !ok {
+			http.Redirect(w, r, "/aws/instances/"+url.QueryEscape(instance.ID)+"?region="+url.QueryEscape(region)+"&error="+url.QueryEscape("Instance launched with user data, but the provider cannot configure private worker-agent ingress."), http.StatusSeeOther)
+			return
+		}
+		if err := ingress.AllowControllerIngress(r.Context(), region, instance.SecurityGroups, bootstrap.ControllerSecurityGroupID, bootstrap.AgentPort); err != nil {
+			http.Redirect(w, r, "/aws/instances/"+url.QueryEscape(instance.ID)+"?region="+url.QueryEscape(region)+"&error="+url.QueryEscape("Instance launched with user data, but controller-to-worker network access could not be configured: "+err.Error()), http.StatusSeeOther)
+			return
+		}
+		notice += " Private worker-agent ingress is restricted to the configured controller security group."
+	} else if bootstrap.Enabled() {
+		notice += " Outbound heartbeat and telemetry work through ngrok; controller-to-worker VM RPC still requires a private VPC path."
+	}
+	http.Redirect(w, r, "/aws/instances/"+url.QueryEscape(instance.ID)+"?region="+url.QueryEscape(region)+"&notice="+url.QueryEscape(notice), http.StatusSeeOther)
 }
 
 func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {
@@ -232,7 +313,7 @@ func (h *Handler) ec2Action(w http.ResponseWriter,r *http.Request) {
  r.Body=http.MaxBytesReader(w,r.Body,16*1024); if err:=r.ParseForm(); err!=nil || !h.verifyCSRF(r) { http.Error(w,"invalid request token",http.StatusForbidden); return }
  action,id:=r.PathValue("action"),r.PathValue("instanceID"); if action!="start" && action!="stop" && action!="terminate" { http.Error(w,"unsupported EC2 action",http.StatusBadRequest); return }
  if h.ec2Client==nil { http.Error(w,"EC2 provisioning unavailable",http.StatusServiceUnavailable); return }
- region:=strings.TrimSpace(r.FormValue("region")); if err:=h.ec2Client.Action(r.Context(),region,id,action); err!=nil { http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(id)+"&region="+url.QueryEscape(region)+"&error="+url.QueryEscape(err.Error()),http.StatusSeeOther); return }
+ region:=strings.TrimSpace(r.FormValue("region")); if err:=h.ec2Client.Action(r.Context(),region,id,action); err!=nil { http.Redirect(w,r,"/aws/instances/"+url.QueryEscape(id)+"?region="+url.QueryEscape(region)+"&error="+url.QueryEscape(err.Error()),http.StatusSeeOther); return }
  http.Redirect(w,r,"/aws?instance_id="+url.QueryEscape(id)+"&region="+url.QueryEscape(region)+"&notice="+url.QueryEscape("EC2 "+action+" request accepted; refresh to confirm state."),http.StatusSeeOther)
 }
 func (h *Handler) workersPage(w http.ResponseWriter, r *http.Request) {

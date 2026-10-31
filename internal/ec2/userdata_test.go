@@ -29,9 +29,11 @@ func TestBuildUserDataInstallsVerifiedAgentAndUsesSSMSecret(t *testing.T) {
 		"sha256sum --check --status", "aws ssm get-parameter", "--with-decryption",
 		"x86_64", "apt-get", "worker-agent", "cloud-hypervisor", "ovmf", "firmware_path", "/api/v1/worker/heartbeat",
 		"worker_endpoint", "worker_name", "aiori-worker-agent.service", "systemctl enable --now",
+		"https://controller.example.test/api/v1/worker/metrics", "rstrip(\x27%\x27)",
 	} {
 		if !strings.Contains(script, expected) { t.Fatalf("bootstrap script omitted %q", expected) }
 	}
+	if strings.Contains(script, "%!") { t.Fatal("bootstrap format template contains unresolved formatting directives") }
 	if strings.Contains(script, "VM_CONTROLLER_WORKER_SHARED_SECRET=supersecret") { t.Fatal("bootstrap must not embed a long-lived worker secret") }
 }
 
@@ -40,7 +42,6 @@ func TestBuildUserDataRejectsUnsafeArtifactAndMissingNetworkIdentity(t *testing.
 		{"non-HTTPS artifact", func(c *BootstrapConfig) { c.WorkerAgentURL = "http://artifacts.example.test/agent" }},
 		{"query-bearing artifact URL", func(c *BootstrapConfig) { c.DiskURL = "https://artifacts.example.test/disk?token=secret" }},
 		{"invalid checksum", func(c *BootstrapConfig) { c.DiskSHA256 = "not-a-checksum" }},
-		{"missing controller security group", func(c *BootstrapConfig) { c.ControllerSecurityGroupID = "" }},
 		{"unsafe image ID", func(c *BootstrapConfig) { c.ImageID = "../root" }},
 		{"invalid SSM parameter", func(c *BootstrapConfig) { c.SecretParameter = "secret-name" }},
 	}
@@ -51,4 +52,13 @@ func TestBuildUserDataRejectsUnsafeArtifactAndMissingNetworkIdentity(t *testing.
 			if _, err := cfg.BuildUserData(); err == nil { t.Fatal("expected bootstrap validation error") }
 		})
 	}
+}
+
+
+func TestBuildUserDataAllowsTelemetryOnlyBootstrapWithoutControllerSecurityGroup(t *testing.T) {
+	cfg := validBootstrapConfig()
+	cfg.ControllerSecurityGroupID = ""
+	script, err := cfg.BuildUserData()
+	if err != nil { t.Fatalf("telemetry-only bootstrap should not require controller VPC security group: %v", err) }
+	if !strings.Contains(script, "/api/v1/worker/metrics") { t.Fatal("bootstrap omitted platform telemetry collector") }
 }

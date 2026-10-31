@@ -63,7 +63,7 @@ function App(){
   </div>
   <div className="docs-hero-aside"><div className="docs-hero-aside-top"><span>GUIDE CONTENTS</span><BookOpen size={17}/></div><div><b>01—04</b><span>Purpose, architecture & placement</span></div><div><b>05—08</b><span>Lifecycle, observability & setup</span></div><div><b>09—13</b><span>API, security, roadmap & FAQ</span></div></div>
  </section>
- <div className="docs-meta-row"><div><span className="docs-meta-icon"><ShieldCheck size={15}/></span><span><b>Implementation-aware</b><small>Distinguishes current behavior from proposed contracts</small></span></div><div><span className="docs-meta-icon"><Code size={15}/></span><span><b>Developer focused</b><small>Commands, repository map and API notes</small></span></div><div><span className="docs-meta-icon"><AlertTriangle size={15}/></span><span><b>Demo boundaries called out</b><small>No confusion between simulation and real infrastructure</small></span></div></div>
+ <div className="docs-meta-row"><div><span className="docs-meta-icon"><ShieldCheck size={15}/></span><span><b>Implementation-aware</b><small>Distinguishes current behavior from proposed contracts</small></span></div><div><span className="docs-meta-icon"><FileText size={15}/></span><span><b>Developer focused</b><small>Commands, repository map and API notes</small></span></div><div><span className="docs-meta-icon"><AlertTriangle size={15}/></span><span><b>Demo boundaries called out</b><small>No confusion between simulation and real infrastructure</small></span></div></div>
  <div className="docs-layout">
   <aside className="docs-toc" aria-label="Documentation chapters">
    <div className="docs-toc-heading"><span>ON THIS PAGE</span><small>13 CHAPTERS</small></div>

@@ -55,7 +55,7 @@ function App(){
   <PageHeader eyebrow="TWO-NODE CLUSTER" title="Cluster overview" desc="A live-style view of worker capacity, virtual machines and recent controller events." action={<button className="btn primary" onClick={()=>{setProvisionError('');setModal(true)}}><Plus size={16}/> Provision VM</button>}/>
   <section className="cluster-summary" aria-label="Cluster status">
    <div className="cluster-summary-main"><span className="cluster-summary-icon"><Command size={18}/></span><div><small>CLUSTER STATUS</small><b>{nodes.every(n=>n.status==='Healthy')?'All systems operational':nodes.some(n=>n.status==='Healthy')?'Degraded · attention required':'Cluster unavailable'}</b><span>Two-node KVM environment <i/> Browser simulation</span></div></div>
-   <div className="cluster-summary-meta"><span><b>{nodes.filter(n=>n.status==='Healthy').length}/2</b><small>Workers healthy</small></span><span><b>{running}/{vms.length}</b><small>VMs running</small></span><span><b>{new Date(clock).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</b><small>Last refreshed</small></span></div>
+   <div className="cluster-summary-meta"><span><b>{nodes.filter(n=>n.status==='Healthy').length}/2</b><small>Workers healthy</small></span><span><b>{running}/{vms.length}</b><small>VMs running</small></span><span><b>{new Date(clock).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</b><small>Console time</small></span></div>
   </section>
   <div className="metric-grid overview-metrics dashboard-metrics">
    <MetricCard label="CPU utilization" value={fmt(cpu)} unit="%" change="Average across sample stream" icon={Cpu}/>

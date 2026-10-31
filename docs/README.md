@@ -17,6 +17,8 @@ Planning branch: `docs/mvp-requirements-design-task-plan`
 9. [Worker deployment runbook](./deployment/worker-deployment.md) — systemd setup, worker registration, acceptance sequence, and teardown.
 10. [Demo runbook](./demo-runbook.md) — repeatable UI/API demo, fault evidence, and cautious teardown.
 
+11. [Frontend controller simulation](./frontend-controller-simulation.md) — browser demo scope, two-worker placement rules, node health model, accessibility requirements, and the backend integration seam.
+
 ## MVP north star
 
 Deliver a working web interface and authenticated API that can create, start, stop, and list VMs across two worker hosts, using Cloud Hypervisor and KVM, with memory-aware placement and persistent operation tracking.

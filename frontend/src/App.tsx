@@ -27,7 +27,7 @@ function App(){
  const [settings,setSettings]=useState({email:true,maintenance:false,compact:false,autoRefresh:true});
  const [docTab,setDocTab]=useState('overview');
  useEffect(()=>{const f=()=>setPage((location.hash.replace('#/','') as Page)||'home');window.addEventListener('hashchange',f);return()=>window.removeEventListener('hashchange',f)},[]);
- useEffect(()=>{const t=window.setInterval(()=>{setClock(Date.now());setSeries(s=>[...s.slice(1),{cpu:25+Math.random()*48,memory:42+Math.random()*24,net:25+Math.random()*70}]);},3000);return()=>window.clearInterval(t)},[]);
+ useEffect(()=>{const t=window.setInterval(()=>{setClock(Date.now());const sample={cpu:25+Math.random()*48,memory:42+Math.random()*24,net:25+Math.random()*70};setSeries(s=>[...s.slice(1),sample]);if(sample.cpu>68&&Math.random()>.72){const now=Date.now();setAlerts(a=>[{id:now,title:'Elevated CPU activity detected',detail:'Live telemetry observed a brief CPU utilization spike on the worker fleet',severity:'Warning',created:now,ack:false},...a].slice(0,20));}},3000);return()=>window.clearInterval(t)},[]);
  useEffect(()=>{localStorage.setItem('cc-vms',JSON.stringify(vms))},[vms]);
  useEffect(()=>{if(!toast)return;const t=window.setTimeout(()=>setToast(''),3200);return()=>window.clearTimeout(t)},[toast]);
  const go=(p:Page)=>{setPage(p);location.hash='/'+p;setMobile(false);window.scrollTo({top:0,behavior:'smooth'})};

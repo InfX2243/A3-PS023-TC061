@@ -49,3 +49,5 @@
 @keyframes spin{to{transform:rotate(360deg)}}
 .app-footer button{border:0;background:none;color:#91a0ff;font-size:9px;cursor:pointer}
 @media(max-width:700px){.sidebar{transform:translateX(-100%);transition:transform .2s}.sidebar.show{transform:translateX(0)}.user-button{display:flex}.modal-card{padding:23px}.toast{right:16px;bottom:16px}.row-actions{gap:0}.alert-row .ack-label{margin-left:auto}}
+
+.compact-table td{padding-top:8px;padding-bottom:8px}.public-docs{max-width:1200px;margin:0 auto;padding-top:45px;padding-bottom:65px}.public-docs .page-head{margin-bottom:30px}.public-docs .docs-layout{grid-template-columns:210px 1fr}@media(max-width:700px){.public-docs{padding:24px 16px}.public-docs .docs-layout{grid-template-columns:1fr}}

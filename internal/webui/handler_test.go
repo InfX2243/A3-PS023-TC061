@@ -15,14 +15,15 @@ import (
 	"github.com/InfX2243/A3-PS023-TC061/internal/ec2"
 )
 
-type fakeUIService struct { registeredID string; registeredName string; registeredEndpoint string; registeredMemory uint64; deletedID string; createCalls int; lastKey string; startCalls int; stopCalls int; vms []domain.VM; latest domain.Operation; latestErr error }
+type fakeUIService struct { registeredID string; registeredName string; registeredEndpoint string; registeredMemory uint64; deletedID string; createCalls int; lastKey string; startCalls int; stopCalls int; vms []domain.VM; latest domain.Operation; latestErr error; workers []domain.Worker }
 func (s *fakeUIService) RegisterWorker(_ context.Context, id, name, endpoint string, memory uint64) error {
 	s.registeredID, s.registeredName, s.registeredEndpoint, s.registeredMemory = id, name, endpoint, memory
 	return nil
 }
 func (s *fakeUIService) DeleteWorker(_ context.Context, id string) error { s.deletedID = id; return nil }
 
-func (*fakeUIService) ListWorkers(context.Context) ([]domain.Worker, error) {
+func (s *fakeUIService) ListWorkers(context.Context) ([]domain.Worker, error) {
+	if s.workers != nil { return s.workers, nil }
 	return []domain.Worker{{ID:"worker-a", Name:"Worker A", State:domain.WorkerHealthy, AvailableMemoryBytes:2*1024*1024*1024, MemoryLimitBytes:4*1024*1024*1024}}, nil
 }
 func (s *fakeUIService) ListVMs(context.Context) ([]domain.VM, error) { return s.vms, nil }
@@ -162,7 +163,7 @@ func TestDashboardRefreshesWhileOperationIsUnknown(t *testing.T) {
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusOK { t.Fatalf("dashboard status=%d", response.Code) }
 	if !strings.Contains(response.Body.String(), "http-equiv=\"refresh\" content=\"5\"") { t.Fatal("dashboard did not refresh for unknown operation") }
-	for _, expected := range []string{"demo", "worker-a", "ubuntu-demo", "start: unknown"} { if !strings.Contains(response.Body.String(), expected) { t.Fatalf("dashboard omitted %q", expected) } }
+	for _, expected := range []string{"Worker inventory", "Virtual machines", "href=\"/vms\""} { if !strings.Contains(response.Body.String(), expected) { t.Fatalf("dashboard omitted workspace destination %q", expected) } }
 	if strings.Contains(response.Body.String(), ">Start</button>") || strings.Contains(response.Body.String(), ">Stop</button>") { t.Fatal("dashboard offered lifecycle action for unknown state") }
 }
 
@@ -173,7 +174,7 @@ func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
 		t.Fatalf("documentation status = %d; body=%s", response.Code, response.Body.String())
 	}
 	body := response.Body.String()
-	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\"", "id=\"main-content\"", "Skip to main content", "/console", "aria-current=\"location\"", "font-size:16px", "/assets/ui.js"} {
+	for _, expected := range []string{"Platform overview", "Quick start", "Architecture and request flow", "Lifecycle and operation states", "Security model", "Current limitations", "href=\"/login\"", "id=\"main-content\"", "Skip to main content", "/console", "aria-current=\"location\"", "font-size:16px", "/assets/ui.js", "docs-reading-progress", "docs-search", "Find a topic", "docs-back-top"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("documentation page omitted %q", expected)
 		}
@@ -181,6 +182,94 @@ func TestDocumentationIsPublicAndLinksToOperatorConsole(t *testing.T) {
 	if strings.Contains(body, "name=\"token\"") {
 		t.Fatal("public documentation should not render the operator login form")
 	}
+}
+
+func TestDashboardRendersControlCentreChartsAlertsAndScrollableWorkspace(t *testing.T) {
+	h, handler := newTestUI()
+	h.service.(*fakeUIService).workers = []domain.Worker{{ID: "worker-stale", Name: "Stale Worker", State: domain.WorkerStale, AvailableMemoryBytes: 1024, MemoryLimitBytes: 2048}}
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/console", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("dashboard status = %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{
+		"dashboard-body", "dashboard-shell", "dashboard-content", "Workload distribution",
+		"Worker memory headroom", "Operational alerts", "state-chart", "capacity-chart",
+		"data-alert-dismiss", "dashboard-refresh", "aria-live=\"polite\"",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("dashboard omitted control-centre feature %q", expected)
+		}
+	}
+}
+
+func TestVirtualMachineNavigationUsesDedicatedAuthenticatedPage(t *testing.T) {
+	h, handler := newTestUI()
+	fake := h.service.(*fakeUIService)
+	fake.vms = []domain.VM{{ID:"vm-prod-01", Name:"Production API", WorkerID:"worker-a", VCPUs:2, MemoryBytes:2048*1024*1024, ImageID:"ubuntu-demo", Observed:domain.VMRunning}}
+	unauthenticated := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, "/vms", nil))
+	if unauthenticated.Code != http.StatusSeeOther || unauthenticated.Header().Get("Location") != "/login" {
+		t.Fatalf("unauthenticated VM inventory = %d, location %q", unauthenticated.Code, unauthenticated.Header().Get("Location"))
+	}
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/vms", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("VM inventory status = %d; body=%s", response.Code, response.Body.String()) }
+	body := response.Body.String()
+	for _, expected := range []string{"Virtual machines", "VM inventory", "Production API", "vm-prod-01", "worker-a", "vCPU", "2048 MiB RAM", "href=\"/vms/new\"", "action=\"/vms/vm-prod-01/stop\""} {
+		if !strings.Contains(body, expected) { t.Errorf("VM inventory omitted %q", expected) }
+	}
+	if strings.Contains(body, "href=\"/console#vms\"") { t.Fatal("virtual machine navigation still points to a dashboard section") }
+	for _, expected := range []string{"vm-inventory-body", "vm-shell", "vm-main", "vm-topbar", "vm-content", "vm-metrics", "data-vm-search", "data-vm-state-filter", "data-vm-row", "vm-bottom-grid", "aria-label=\"Virtual machine inventory table\""} {
+		if !strings.Contains(body, expected) { t.Errorf("VM inventory omitted workspace feature %q", expected) }
+	}
+}
+
+ 
+func TestVMInventoryUsesFixedNavigationAndSingleScrollableWorkspace(t *testing.T) {
+	h, handler := newTestUI()
+	fake := h.service.(*fakeUIService)
+	fake.vms = []domain.VM{
+		{ID: "vm-running", Name: "API Production", WorkerID: "worker-a", VCPUs: 4, MemoryBytes: 4096 * 1024 * 1024, ImageID: "ubuntu-24", Observed: domain.VMRunning},
+		{ID: "vm-stopped", Name: "Staging Database", WorkerID: "worker-b", VCPUs: 2, MemoryBytes: 2048 * 1024 * 1024, ImageID: "debian-12", Observed: domain.VMStopped},
+	}
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/vms", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("VM inventory status=%d body=%s", response.Code, response.Body.String()) }
+	body := response.Body.String()
+	for _, expected := range []string{"API Production", "Staging Database", "vm-running", "vm-stopped", "data-vm-state=\"running\"", "data-vm-state=\"stopped\"", "data-vm-search", "data-vm-state-filter", "action=\"/vms/vm-running/stop\"", "action=\"/vms/vm-stopped/start\""} {
+		if !strings.Contains(body, expected) { t.Errorf("VM inventory omitted %q", expected) }
+	}
+	if strings.Contains(body, "max-height:560px") || strings.Contains(body, "vm-table-scroll{max-height:") {
+		t.Fatal("VM inventory must not introduce a nested vertical scrolling region")
+	}
+	css := httptest.NewRecorder()
+	handler.ServeHTTP(css, httptest.NewRequest(http.MethodGet, "/assets/ui.css", nil))
+	for _, expected := range []string{"body.vm-inventory-body{height:100vh", ".vm-shell>.sidebar{position:fixed", ".vm-main{display:flex", ".vm-content{width:100%;max-width:none;flex:1 1 auto;min-height:0;overflow-y:auto", ".vm-table-scroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:visible"} {
+		if !strings.Contains(css.Body.String(), expected) { t.Errorf("VM inventory layout CSS omitted %q", expected) }
+	}
+	js := httptest.NewRecorder()
+	handler.ServeHTTP(js, httptest.NewRequest(http.MethodGet, "/assets/ui.js", nil))
+	if !strings.Contains(js.Body.String(), "initVMInventoryInteractions") { t.Fatal("VM inventory filtering enhancement was not served") }
 }
 
 func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testing.T) {
@@ -199,6 +288,9 @@ func TestDashboardNavigationIncludesDocumentationAndAvoidsDuplicateHero(t *testi
 	if !strings.Contains(body, "href=\"/docs\"") {
 		t.Fatal("dashboard navigation omitted documentation link")
 	}
+	if !strings.Contains(body, "href=\"/vms\"") || strings.Contains(body, "id=\"vms\"") {
+		t.Fatal("dashboard must link to the dedicated VM inventory instead of exposing a VM section destination")
+	}
 	if strings.Contains(body, "Your compute fleet, at a glance.") {
 		t.Fatal("dashboard retained the duplicate hero message")
 	}
@@ -214,13 +306,45 @@ func TestLandingPageIsPublicAndHasDistinctDocumentationAndLoginRoutes(t *testing
 		t.Fatalf("landing status = %d", response.Code)
 	}
 	body := response.Body.String()
-	for _, expected := range []string{"Infrastructure operations,", "href=\"/docs\"", "href=\"/login\"", "id=\"platform\"", "prefers-reduced-motion", "illustrative interface preview"} {
+	for _, expected := range []string{"Infrastructure,", "href=\"/docs\"", "href=\"/login\"", "id=\"platform\"", "id=\"how-it-works\"", "data-preview-tab=\"fleet\"", "data-preview-panel=\"capacity\"", "Illustrative interface preview"} {
 		if !strings.Contains(strings.ToLower(body), strings.ToLower(expected)) {
 			t.Fatalf("landing page omitted %q", expected)
 		}
 	}
 	if strings.Contains(body, "name=\"token\"") {
 		t.Fatal("public landing page should not contain the operator login form")
+	}
+}
+
+func TestLoginPageHasAccessiblePremiumAuthExperience(t *testing.T) {
+	_, handler := newTestUI()
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("login page status = %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{"auth-page", "auth-showcase", "auth-content", "SECURE OPERATOR ACCESS", "data-password-toggle=\"token\"", "auth-assurance", "href=\"/docs\"", "Skip to main content", "src=\"/assets/ui.js\""} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("login page omitted %q", expected)
+		}
+	}
+	if strings.Contains(body, "name=\"username\"") || strings.Contains(body, "name=\"password\"") {
+		t.Fatal("token-auth login should not render username/password fields")
+	}
+}
+
+func TestCredentialLoginPageRendersUsernamePasswordAndToggle(t *testing.T) {
+	mux := http.NewServeMux()
+	h := NewHandlerWithCredentials(&fakeUIService{}, "session-signing-secret", "operator", "correct-horse-battery-staple-2026", Limits{}, false)
+	h.Register(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/login", nil))
+	body := response.Body.String()
+	for _, expected := range []string{"name=\"username\"", "name=\"password\"", "autocomplete=\"username\"", "autocomplete=\"current-password\"", "data-password-toggle=\"password\""} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("credential login page omitted %q", expected)
+		}
 	}
 }
 
@@ -252,7 +376,7 @@ func TestUIEnhancementAssetAndFormLoadingStates(t *testing.T) {
 	if !strings.HasPrefix(asset, "// Progressive enhancements for the server-rendered operator UI.\n(function () {") {
 		t.Fatal("enhancement asset is not emitted as a valid source file")
 	}
-	for _, expected := range []string{"IntersectionObserver", "aria-current", "Signing in…", "Signing out…", "prefers-reduced-motion"} {
+	for _, expected := range []string{"IntersectionObserver", "aria-current", "Signing in…", "Signing out…", "prefers-reduced-motion", "initDocsInteractions", "docs-code-copy", "clipboard.writeText"} {
 		if !strings.Contains(asset, expected) {
 			t.Fatalf("enhancement asset omitted %q", expected)
 		}
@@ -296,6 +420,7 @@ func TestPrimaryPagesExposeKeyboardSkipNavigation(t *testing.T) {
 		{path: "/docs", cookie: false},
 		{path: "/login", cookie: false},
 		{path: "/console", cookie: true},
+		{path: "/vms", cookie: true},
 		{path: "/vms/new", cookie: true},
 	}
 	for _, page := range pages {
@@ -334,7 +459,7 @@ func TestWorkerInventoryRequiresAuthenticationAndRendersRegistrationForm(t *test
 	page := httptest.NewRecorder()
 	handler.ServeHTTP(page, request)
 	if page.Code != http.StatusOK { t.Fatalf("worker inventory status = %d; body=%s", page.Code, page.Body.String()) }
-	for _, want := range []string{"Register an existing worker manually", "memory_limit_mib", "Agent endpoint"} {
+	for _, want := range []string{"Register an existing worker", "memory_limit_mib", "Agent endpoint"} {
 		if !strings.Contains(page.Body.String(), want) { t.Errorf("worker page missing %q", want) }
 	}
 }
@@ -431,4 +556,141 @@ func TestAWSPageShowsManagedInstanceInventoryAndIndependentScrollRegion(t *testi
 	for _, expected := range []string{"Managed EC2 inventory", "aiori-worker", "i-node123", "203.0.113.8", "Registered worker", "healthy", "aws-table-scroll", "Refresh inventory from AWS"} {
 		if !strings.Contains(body, expected) { t.Fatalf("AWS page omitted %q", expected) }
 	}
+}
+
+
+func TestAWSPageUsesFixedNavigationAndSingleScrollableWorkspace(t *testing.T) {
+ h, handler := newTestUI()
+ h.SetEC2Provisioner(&fakeEC2Inventory{instances: []ec2.Instance{{ID:"i-fixed",Name:"Fixed EC2",Type:"t3.micro",State:struct{Name string}{Name:"running"}}}})
+ login := httptest.NewRequest(http.MethodPost,"/login",strings.NewReader("token=operator-secret"))
+ login.Header.Set("Content-Type","application/x-www-form-urlencoded")
+ loginResponse := httptest.NewRecorder()
+ handler.ServeHTTP(loginResponse,login)
+ request := httptest.NewRequest(http.MethodGet,"/aws?region=ap-south-1",nil)
+ request.AddCookie(loginResponse.Result().Cookies()[0])
+ response := httptest.NewRecorder()
+ handler.ServeHTTP(response,request)
+ if response.Code != http.StatusOK { t.Fatalf("AWS page status=%d body=%s",response.Code,response.Body.String()) }
+ body := response.Body.String()
+ for _, want := range []string{"aws-inventory-body","aws-shell","aws-main","aws-topbar","aws-content","aws-overview","Managed EC2 inventory","data-aws-search","data-aws-state-filter","data-aws-row","data-aws-confirm","i-fixed"} {
+  if !strings.Contains(body,want) { t.Errorf("AWS page omitted %q",want) }
+ }
+ css := httptest.NewRecorder()
+ handler.ServeHTTP(css,httptest.NewRequest(http.MethodGet,"/assets/ui.css",nil))
+ for _, want := range []string{"body.aws-inventory-body","position:fixed!important","overflow-y:auto;overflow-x:hidden","height:100dvh","overflow-y:visible;max-height:none"} {
+  if !strings.Contains(css.Body.String(),want) { t.Errorf("AWS stylesheet omitted %q",want) }
+ }
+ if strings.Contains(body,"max-height:560px") || strings.Contains(body,"max-height:420px") { t.Fatal("AWS inventory must not create a nested vertical scroll region") }
+ js := httptest.NewRecorder()
+ handler.ServeHTTP(js,httptest.NewRequest(http.MethodGet,"/assets/ui.js",nil))
+ for _, want := range []string{"initAWSInventoryInteractions","data-aws-state-filter","data-aws-confirm"} {
+  if !strings.Contains(js.Body.String(),want) { t.Errorf("AWS interactions omitted %q",want) }
+ }
+}
+
+func TestSharedDesignSystemStylesheetIsServedAndApplied(t *testing.T) {
+	_, handler := newTestUI()
+
+	stylesheet := httptest.NewRecorder()
+	handler.ServeHTTP(stylesheet, httptest.NewRequest(http.MethodGet, "/assets/ui.css", nil))
+	if stylesheet.Code != http.StatusOK {
+		t.Fatalf("stylesheet status = %d", stylesheet.Code)
+	}
+	if !strings.Contains(stylesheet.Header().Get("Content-Type"), "text/css") {
+		t.Fatalf("stylesheet content type = %q", stylesheet.Header().Get("Content-Type"))
+	}
+	for _, token := range []string{"--ai-purple: #5145e5", ".sidebar-nav", ".nav-link:active", ".workspace-shortcuts", ".vm-inventory-summary", ".marketing-hero", "@media (max-width:620px)"} {
+		if !strings.Contains(stylesheet.Body.String(), token) {
+			t.Fatalf("design system stylesheet omitted %q", token)
+		}
+	}
+
+	loginRequest := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	loginRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	login := httptest.NewRecorder()
+	handler.ServeHTTP(login, loginRequest)
+	if login.Code != http.StatusSeeOther {
+		t.Fatalf("test login status = %d", login.Code)
+	}
+	cookie := login.Result().Cookies()[0]
+	pages := []string{"/", "/docs", "/login", "/console", "/workers", "/vms", "/aws", "/vms/new"}
+	for _, path := range pages {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		if path != "/" && path != "/docs" && path != "/login" {
+			request.AddCookie(cookie)
+		}
+		page := httptest.NewRecorder()
+		handler.ServeHTTP(page, request)
+		if page.Code != http.StatusOK {
+			t.Fatalf("%s returned status %d", path, page.Code)
+		}
+		if !strings.Contains(page.Body.String(), `<link rel="stylesheet" href="/assets/ui.css">`) {
+			t.Fatalf("%s did not receive the shared design system stylesheet", path)
+		}
+	}
+}
+
+func TestWorkerInventoryUsesFixedNavigationAndSingleScrollableWorkspace(t *testing.T) {
+	h, handler := newTestUI()
+	fake := h.service.(*fakeUIService)
+	fake.workers = []domain.Worker{
+		{ID: "worker-a", Name: "Worker Alpha", Endpoint: "http://10.0.0.1:9090", State: domain.WorkerHealthy, AvailableMemoryBytes: 3 * 1024 * 1024 * 1024, MemoryLimitBytes: 4 * 1024 * 1024 * 1024},
+		{ID: "worker-b", Name: "Worker Beta", Endpoint: "http://10.0.0.2:9090", State: domain.WorkerStale, MemoryLimitBytes: 8 * 1024 * 1024 * 1024},
+	}
+	login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	request := httptest.NewRequest(http.MethodGet, "/workers", nil)
+	request.AddCookie(loginResponse.Result().Cookies()[0])
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK { t.Fatalf("worker inventory status=%d body=%s", response.Code, response.Body.String()) }
+	body := response.Body.String()
+	for _, expected := range []string{
+		"worker-inventory-body", "worker-shell", "worker-main", "worker-topbar", "worker-content",
+		"Worker Alpha", "worker-a", "Worker Beta", "worker-b", "Registered nodes", "Healthy",
+		"Stale", "data-worker-search", "data-worker-row", "Automatic enrollment",
+		"Register an existing worker", "data-confirm=", "href=\"/aws\"",
+	} {
+		if !strings.Contains(body, expected) { t.Errorf("worker inventory omitted %q", expected) }
+	}
+	if strings.Contains(body, "max-height:560px") || strings.Contains(body, "worker-table-scroll{max-height:600px") {
+		t.Fatal("worker inventory should not create a second vertical scrolling region inside the workspace")
+	}
+}
+
+
+func TestPrepareVMPageUsesFixedNavigationAndLiveConfigurationPreview(t *testing.T) {
+  h, handler := newTestUI()
+  login := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("token=operator-secret"))
+  login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+  loginResponse := httptest.NewRecorder()
+  handler.ServeHTTP(loginResponse, login)
+  request := httptest.NewRequest(http.MethodGet, "/vms/new", nil)
+  request.AddCookie(loginResponse.Result().Cookies()[0])
+  response := httptest.NewRecorder()
+  handler.ServeHTTP(response, request)
+  if response.Code != http.StatusOK { t.Fatalf("prepare VM status=%d", response.Code) }
+  body := response.Body.String()
+  for _, expected := range []string{
+    "prepare-vm-body", "prepare-vm-shell", "prepare-vm-main", "prepare-vm-content",
+    "Workload specification", "Resource summary", "data-vm-preset", "data-vm-preview-memory",
+    "name=\"csrf_token\"", "name=\"idempotency_key\"", "name=\"vcpus\"", "name=\"memory_mib\"",
+    "prepare-vm-timeline",
+  } {
+    if !strings.Contains(body, expected) { t.Fatalf("prepare VM page omitted %q", expected) }
+  }
+  if !strings.Contains(body, "action=\"/vms\"") { t.Fatal("prepare VM form lost its create endpoint") }
+  cssRequest := httptest.NewRequest(http.MethodGet, "/assets/ui.css", nil)
+  cssResponse := httptest.NewRecorder()
+  handler.ServeHTTP(cssResponse, cssRequest)
+  for _, expected := range []string{"position:fixed!important", "overflow-y:auto;overflow-x:hidden", "height:100vh"} {
+    if !strings.Contains(cssResponse.Body.String(), expected) { t.Fatalf("prepare VM stylesheet omitted %q", expected) }
+  }
+  jsRequest := httptest.NewRequest(http.MethodGet, "/assets/ui.js", nil)
+  jsResponse := httptest.NewRecorder()
+  handler.ServeHTTP(jsResponse, jsRequest)
+  if !strings.Contains(jsResponse.Body.String(), "initPrepareVMInteractions") { t.Fatal("prepare VM interactions were not served") }
+  _ = h
 }
